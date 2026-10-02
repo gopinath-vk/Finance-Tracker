@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>My Ledger</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#14213d">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
 :root{--bg:#f4f6f8;--card:#fff;--ink:#14213d;--mute:#6b7685;--line:#dde2e8;--pos:#1b7f4b;--neg:#c23b3b;--acc:#14213d}
 @media(prefers-color-scheme:dark){:root{--bg:#10151c;--card:#182029;--ink:#e8edf3;--mute:#8d99a8;--line:#27323f;--pos:#4cc98a;--neg:#ee7b7b;--acc:#e8edf3}}
@@ -33,6 +36,9 @@ input,select{padding:8px;border:1px solid var(--line);border-radius:6px;backgrou
 .bar{height:6px;background:var(--neg);border-radius:3px;margin-top:3px}
 #st{font-size:.85rem;color:var(--mute)}
 .empty{color:var(--mute);padding:8px 0}
+form[data-k=other] .mk,form[data-k=stock] .mo,form[data-k=mf] .mo,form:not([data-k=mf]) .mf{display:none}
+.tr{display:flex;gap:8px;margin-top:8px}.c{flex:1;text-align:center}
+.bs{height:90px;display:flex;gap:3px;align-items:flex-end}.bs i{flex:1;min-height:1px;border-radius:2px 2px 0 0}
 </style>
 </head>
 <body>
@@ -53,11 +59,11 @@ input,select{padding:8px;border:1px solid var(--line);border-radius:6px;backgrou
 <script src="https://accounts.google.com/gsi/client" async></script>
 <script>
 // ===== SETUP: paste your Google OAuth Web Client ID here (see setup steps) =====
-const CLIENT_ID = "512387976783-up22ijdo1g09amtpvsgdpqpcm5h21el5.apps.googleusercontent.com";
+const CLIENT_ID = "PASTE_YOUR_CLIENT_ID.apps.googleusercontent.com";
 // ==============================================================================
 
 const TABS = {
-  overview: {t: "Overview"},
+  overview: {t: "Dashboard"},
   income:   {t: "Income",   a: "Amount", cat: ["Salary","Business","Interest","Other"]},
   expense:  {t: "Expenses", a: "Amount", cat: ["Housing","Food","Transport","Bills","Health","Fun","Other"]},
   investment:{t:"Investments",a: "Current value", x: "Amount invested", cat: ["Stocks","Funds","Bonds","Crypto","Property","Other"]},
@@ -67,13 +73,13 @@ const KEY = "ledger-data";
 let tab = "overview", token = null, tokenExp = 0, fileId = null, timer = null;
 let db = load();
 
-function load(){ try { return JSON.parse(localStorage.getItem(KEY)) || blank(); } catch(e){ return blank(); } }
-function blank(){ return {updatedAt: 0, cur: "$", items: []}; }
+function load(){ try { const d = JSON.parse(localStorage.getItem(KEY)) || blank(); if (d.cur === "$") d.cur = "₹"; return d; } catch(e){ return blank(); } }
+function blank(){ return {updatedAt: 0, cur: "₹", items: []}; }
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const money = n => (n < 0 ? "-" : "") + db.cur + Math.abs(n).toLocaleString(undefined,{maximumFractionDigits:2});
+const money = n => (n < 0 ? "-" : "") + db.cur + Math.abs(n).toLocaleString("en-IN",{maximumFractionDigits:2});
 const sum = (t, f = i => i.amount) => db.items.filter(i => i.type === t).reduce((s, i) => s + f(i), 0);
-const month = () => new Date().toISOString().slice(0,7);
+const month = () => new Date().toLocaleDateString("sv").slice(0,7);
 
 function save(){
   db.updatedAt = Date.now();
@@ -97,6 +103,13 @@ function overview(){
   const cats = {};
   db.items.filter(i => i.type==="expense" && m(i)).forEach(i => cats[i.cat] = (cats[i.cat]||0) + i.amount);
   const top = Math.max(1, ...Object.values(cats));
+  const ms = [...Array(6)].map((_,k) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()-5+k); return d.toLocaleDateString("sv").slice(0,7); });
+  const tot = (t,mm) => db.items.filter(i => i.type===t && i.date && i.date.startsWith(mm)).reduce((s,i) => s+i.amount, 0);
+  const tm = Math.max(1, ...ms.flatMap(x => [tot("income",x), tot("expense",x)]));
+  const trend = `<div class="card"><div class="lab">Last 6 months: income (green) and expenses (red)</div><div class="tr">${ms.map(x => `<div class="c"><div class="bs"><i style="height:${tot("income",x)/tm*100}%;background:var(--pos)"></i><i style="height:${tot("expense",x)/tm*100}%;background:var(--neg)"></i></div><span class="lab">${new Date(x+"-15").toLocaleDateString(undefined,{month:"short"})}</span></div>`).join("")}</div></div>`;
+  const upd = Math.max(0, ...db.items.map(i => i.priceAt||0));
+  const hold = db.items.filter(i => i.type==="investment").sort((a,b) => b.amount-a.amount).map(i => { const g = i.amount-(i.extra||0); return `<div class="row"><span>${esc(i.name)}</span><span><b>${money(i.amount)}</b> <span class="${g<0?'neg':'pos'}">${i.extra ? (g/i.extra*100).toFixed(1)+"%" : ""}</span></span></div>`; }).join("");
+  const holdCard = `<div class="card"><div class="lab">Holdings ${upd ? "· prices updated " + new Date(upd).toLocaleString([], {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : ""}</div>${hold || '<div class="empty">No investments yet. Add one in Investments.</div>'}<button class="ghost" id="rp">Refresh prices</button> <span class="lab" id="pst"></span></div>`;
   return `<div class="card"><div class="lab">Net worth (investments minus liabilities)</div>
     <div class="big ${nw<0?'neg':''}">${money(nw)}</div></div>
   <div class="grid">
@@ -107,7 +120,7 @@ function overview(){
     <div class="card"><div class="lab">Total invested value</div><b>${money(inv)}</b></div>
     <div class="card"><div class="lab">Total liabilities</div><b class="neg">${money(debt)}</b></div>
   </div>
-  <div class="card"><div class="lab">Where this month's money went</div>
+  ${trend}${holdCard}<div class="card"><div class="lab">Where this month's money went</div>
   ${Object.keys(cats).length ? Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([c,v]) =>
     `<div style="margin-top:8px"><div class="row" style="padding:0;border:0"><span>${esc(c)}</span><b>${money(v)}</b></div><div class="bar" style="width:${v/top*100}%"></div></div>`).join("")
     : '<div class="empty">No expenses logged this month. Add one in Expenses.</div>'}</div>`;
@@ -115,13 +128,14 @@ function overview(){
 
 function list(t){
   const c = TABS[t], items = db.items.filter(i => i.type === t).sort((a,b) => (b.date||"").localeCompare(a.date||""));
+  if (t==="investment") return invList(items);
   const dated = t==="income" || t==="expense";
   return `<form class="card" id="f" data-t="${t}">
     <input name="name" placeholder="Name" required>
     <select name="cat">${c.cat.map(x=>`<option>${x}</option>`).join("")}</select>
     <input name="amount" type="number" step="any" placeholder="${c.a}" required>
     ${c.x ? `<input name="extra" type="number" step="any" placeholder="${c.x}">` : ""}
-    ${dated ? `<input name="date" type="date" value="${new Date().toISOString().slice(0,10)}" required>` : ""}
+    ${dated ? `<input name="date" type="date" value="${new Date().toLocaleDateString("sv")}" required>` : ""}
     <button>Add ${c.t.replace(/s$/,"").toLowerCase()}</button></form>
   <div class="card">${items.length ? items.map(i => `<div class="row"><div>${esc(i.name)}<div class="lab">${esc(i.cat)}${i.date?" · "+i.date:""}${t==="investment"?" · invested "+money(i.extra||0):""}${t==="liability"?" · "+(i.extra||0)+"% interest":""}</div></div>
     <div><b class="${t==="income"?"pos":t==="expense"||t==="liability"?"neg":""}">${money(i.amount)}</b> <button class="x" data-del="${i.id}" aria-label="Delete">✕</button></div></div>`).join("")
@@ -132,11 +146,35 @@ document.addEventListener("click", e => {
   if (e.target.dataset.t) { tab = e.target.dataset.t; render(); }
   if (e.target.dataset.del && confirm("Delete this entry?")) { db.items = db.items.filter(i => i.id !== e.target.dataset.del); save(); }
 });
+function invList(items){
+  const rows = items.length ? items.map(i => `<div class="row"><div>${esc(i.name)}<div class="lab">${i.sym ? esc(i.sym)+" · "+i.units+" units @ "+(i.price ? money(i.price) : "waiting for price") : "Manual value"} · invested ${money(i.extra||0)}</div></div><div><b>${money(i.amount)}</b> <button class="x" data-del="${i.id}" aria-label="Delete">✕</button></div></div>`).join("") : '<div class="empty">Nothing here yet. Add a stock, mutual fund or other asset above.</div>';
+  return `<form class="card" id="f" data-t="investment" data-k="stock">
+    <select name="kind"><option value="stock">Stock (NSE)</option><option value="mf">Mutual fund</option><option value="other">Other (manual value)</option></select>
+    <input class="mf" id="mfq" placeholder="Search fund name" autocomplete="off">
+    <select class="mf" id="mfr"><option value="">Pick a fund</option></select>
+    <input name="name" placeholder="Name" required>
+    <input class="mk" name="sym" placeholder="NSE symbol (TCS) or fund code">
+    <input class="mk" name="units" type="number" step="any" placeholder="Units / shares">
+    <input class="mo" name="amount" type="number" step="any" placeholder="Current value">
+    <input name="extra" type="number" step="any" placeholder="Amount invested">
+    <button>Add investment</button></form>
+  <div class="card"><button class="ghost" id="rp">Refresh prices</button> <span class="lab" id="pst"></span>${rows}</div>`;
+}
+document.addEventListener("change", e => {
+  if (e.target.name === "kind") e.target.form.dataset.k = e.target.value;
+  if (e.target.id === "mfr" && e.target.value) { const f = e.target.form; f.sym.value = e.target.value; f.name.value = e.target.selectedOptions[0].text; }
+});
+document.addEventListener("input", async e => {
+  if (e.target.id !== "mfq" || e.target.value.length < 3) return;
+  try { const r = await (await fetch("https://api.mfapi.in/mf/search?q=" + encodeURIComponent(e.target.value))).json();
+    $("mfr").innerHTML = '<option value="">Pick a fund</option>' + r.slice(0,15).map(x => `<option value="${x.schemeCode}">${esc(x.schemeName)}</option>`).join(""); } catch(x){}
+});
 document.addEventListener("submit", e => {
   e.preventDefault();
   const f = e.target, d = Object.fromEntries(new FormData(f));
-  db.items.push({id: crypto.randomUUID(), type: f.dataset.t, name: d.name, cat: d.cat, amount: +d.amount, extra: +d.extra || 0, date: d.date || ""});
-  save();
+  const it = {id: crypto.randomUUID(), type: f.dataset.t, name: d.name, cat: d.cat || d.kind, amount: +d.amount || 0, extra: +d.extra || 0, date: d.date || ""};
+  if (it.type === "investment" && d.kind !== "other") { it.kind = d.kind; it.sym = (d.sym||"").trim(); it.units = +d.units || 0; if (!it.sym || !it.units) return alert("Enter the symbol or fund code, and the units."); }
+  db.items.push(it); save(); if (it.sym) refreshPrices();
 });
 $("cur").oninput = e => { db.cur = e.target.value || "$"; save(); };
 $("exp").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(db)],{type:"application/json"})); a.download = "ledger-backup.json"; a.click(); };
@@ -190,6 +228,36 @@ async function push(){
   } catch(e){ status("Drive save failed"); }
 }
 window.addEventListener("load", () => { if (localStorage.getItem("ledger-sync")) $("sync").textContent = "Reconnect Drive"; });
+// ===== Live prices (stocks via Yahoo Finance, mutual funds via mfapi.in) =====
+async function quote(i){
+  if (i.kind === "mf") { const r = await (await fetch(`https://api.mfapi.in/mf/${i.sym}/latest`)).json(); return +r.data[0].nav; }
+  const s = i.sym.toUpperCase(), y = s.includes(".") ? s : s + ".NS";
+  const u = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(y)}?interval=1d&range=1d`;
+  const r = await (await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(u))).json();
+  return r.chart.result[0].meta.regularMarketPrice;
+}
+let busy = false;
+async function refreshPrices(){
+  if (busy || !navigator.onLine) return;
+  busy = true; if ($("pst")) $("pst").textContent = "Updating…";
+  let ok = 0, bad = 0;
+  for (const i of db.items.filter(x => x.type === "investment" && x.sym)) {
+    try { const p = await quote(i); if (p > 0) { i.price = p; i.amount = +(p * i.units).toFixed(2); i.priceAt = Date.now(); ok++; } } catch(e){ bad++; }
+  }
+  busy = false;
+  if (ok) save(); else render();
+  if (bad && $("pst")) $("pst").textContent = bad + " price(s) could not be fetched";
+}
+async function autoSync(){
+  if (!navigator.onLine) return;
+  if (localStorage.getItem("ledger-sync") && window.google) { try { await getToken(false); await pull(); } catch(e){ status("Saved on this device. Tap Reconnect Drive to sync."); } }
+  refreshPrices();
+}
+document.addEventListener("click", e => { if (e.target.id === "rp") refreshPrices(); });
+window.addEventListener("online", autoSync);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) autoSync(); });
+window.addEventListener("load", () => setTimeout(autoSync, 1500));
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
 render();
 </script>
 </body>
