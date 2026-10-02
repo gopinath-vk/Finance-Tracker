@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Ledger</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--ink:#14213d;--mute:#6b7685;--line:#dde2e8;--pos:#1b7f4b;--neg:#c23b3b;--acc:#14213d}
+@media(prefers-color-scheme:dark){:root{--bg:#10151c;--card:#182029;--ink:#e8edf3;--mute:#8d99a8;--line:#27323f;--pos:#4cc98a;--neg:#ee7b7b;--acc:#e8edf3}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Georgia,'Iowan Old Style',serif}
+main{max-width:760px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+h1{font-size:1.4rem;margin:0}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--acc);color:var(--bg);border:0;border-radius:6px;padding:8px 14px;cursor:pointer}
+button.ghost{background:none;color:var(--ink);border:1px solid var(--line)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--pos);outline-offset:2px}
+nav{display:flex;gap:4px;overflow-x:auto;margin:14px 0;border-bottom:1px solid var(--line)}
+nav button{background:none;color:var(--mute);border-radius:0;border-bottom:3px solid transparent;white-space:nowrap}
+nav button.on{color:var(--ink);border-color:var(--ink)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px}
+.big{font-size:2.2rem;font-variant-numeric:tabular-nums}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.lab{color:var(--mute);font-size:.85rem}
+.pos{color:var(--pos)}.neg{color:var(--neg)}
+form{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+input,select{padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);width:100%}
+.row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);align-items:center}
+.row:last-child{border:0}
+.row b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.row .x{background:none;color:var(--mute);padding:2px 8px}
+.bar{height:6px;background:var(--neg);border-radius:3px;margin-top:3px}
+#st{font-size:.85rem;color:var(--mute)}
+.empty{color:var(--mute);padding:8px 0}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>My Ledger</h1>
+  <div><span id="st"></span> <button class="ghost" id="sync">Connect Google Drive</button></div>
+</header>
+<nav id="nav"></nav>
+<div id="view"></div>
+<div class="card">
+  <span class="lab">Currency symbol</span> <input id="cur" style="width:70px">
+  <button class="ghost" id="exp">Export backup</button>
+  <button class="ghost" id="imp">Import backup</button>
+  <input type="file" id="file" accept=".json" hidden>
+</div>
+</main>
+<script src="https://accounts.google.com/gsi/client" async></script>
+<script>
+// ===== SETUP: paste your Google OAuth Web Client ID here (see setup steps) =====
+const CLIENT_ID = "PASTE_YOUR_CLIENT_ID.apps.googleusercontent.com";
+// ==============================================================================
+
+const TABS = {
+  overview: {t: "Overview"},
+  income:   {t: "Income",   a: "Amount", cat: ["Salary","Business","Interest","Other"]},
+  expense:  {t: "Expenses", a: "Amount", cat: ["Housing","Food","Transport","Bills","Health","Fun","Other"]},
+  investment:{t:"Investments",a: "Current value", x: "Amount invested", cat: ["Stocks","Funds","Bonds","Crypto","Property","Other"]},
+  liability:{t: "Liabilities",a: "Balance owed", x: "Interest rate %", cat: ["Loan","Credit card","Mortgage","Other"]}
+};
+const KEY = "ledger-data";
+let tab = "overview", token = null, tokenExp = 0, fileId = null, timer = null;
+let db = load();
+
+function load(){ try { return JSON.parse(localStorage.getItem(KEY)) || blank(); } catch(e){ return blank(); } }
+function blank(){ return {updatedAt: 0, cur: "$", items: []}; }
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const money = n => (n < 0 ? "-" : "") + db.cur + Math.abs(n).toLocaleString(undefined,{maximumFractionDigits:2});
+const sum = (t, f = i => i.amount) => db.items.filter(i => i.type === t).reduce((s, i) => s + f(i), 0);
+const month = () => new Date().toISOString().slice(0,7);
+
+function save(){
+  db.updatedAt = Date.now();
+  localStorage.setItem(KEY, JSON.stringify(db));
+  render();
+  if (token) { clearTimeout(timer); timer = setTimeout(push, 1500); }
+}
+
+function render(){
+  $("nav").innerHTML = Object.entries(TABS).map(([k,v]) => `<button class="${k===tab?'on':''}" data-t="${k}">${v.t}</button>`).join("");
+  $("cur").value = db.cur;
+  $("view").innerHTML = tab === "overview" ? overview() : list(tab);
+}
+
+function overview(){
+  const inv = sum("investment"), cost = sum("investment", i => i.extra||0), debt = sum("liability");
+  const m = i => i.date && i.date.startsWith(month());
+  const mi = db.items.filter(i => i.type==="income" && m(i)).reduce((s,i)=>s+i.amount,0);
+  const me = db.items.filter(i => i.type==="expense" && m(i)).reduce((s,i)=>s+i.amount,0);
+  const gain = inv - cost, nw = inv - debt;
+  const cats = {};
+  db.items.filter(i => i.type==="expense" && m(i)).forEach(i => cats[i.cat] = (cats[i.cat]||0) + i.amount);
+  const top = Math.max(1, ...Object.values(cats));
+  return `<div class="card"><div class="lab">Net worth (investments minus liabilities)</div>
+    <div class="big ${nw<0?'neg':''}">${money(nw)}</div></div>
+  <div class="grid">
+    <div class="card"><div class="lab">Income this month</div><b class="pos">${money(mi)}</b></div>
+    <div class="card"><div class="lab">Expenses this month</div><b class="neg">${money(me)}</b></div>
+    <div class="card"><div class="lab">Saved this month</div><b>${money(mi-me)}</b></div>
+    <div class="card"><div class="lab">Investment gain</div><b class="${gain<0?'neg':'pos'}">${money(gain)}</b></div>
+    <div class="card"><div class="lab">Total invested value</div><b>${money(inv)}</b></div>
+    <div class="card"><div class="lab">Total liabilities</div><b class="neg">${money(debt)}</b></div>
+  </div>
+  <div class="card"><div class="lab">Where this month's money went</div>
+  ${Object.keys(cats).length ? Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([c,v]) =>
+    `<div style="margin-top:8px"><div class="row" style="padding:0;border:0"><span>${esc(c)}</span><b>${money(v)}</b></div><div class="bar" style="width:${v/top*100}%"></div></div>`).join("")
+    : '<div class="empty">No expenses logged this month. Add one in Expenses.</div>'}</div>`;
+}
+
+function list(t){
+  const c = TABS[t], items = db.items.filter(i => i.type === t).sort((a,b) => (b.date||"").localeCompare(a.date||""));
+  const dated = t==="income" || t==="expense";
+  return `<form class="card" id="f" data-t="${t}">
+    <input name="name" placeholder="Name" required>
+    <select name="cat">${c.cat.map(x=>`<option>${x}</option>`).join("")}</select>
+    <input name="amount" type="number" step="any" placeholder="${c.a}" required>
+    ${c.x ? `<input name="extra" type="number" step="any" placeholder="${c.x}">` : ""}
+    ${dated ? `<input name="date" type="date" value="${new Date().toISOString().slice(0,10)}" required>` : ""}
+    <button>Add ${c.t.replace(/s$/,"").toLowerCase()}</button></form>
+  <div class="card">${items.length ? items.map(i => `<div class="row"><div>${esc(i.name)}<div class="lab">${esc(i.cat)}${i.date?" · "+i.date:""}${t==="investment"?" · invested "+money(i.extra||0):""}${t==="liability"?" · "+(i.extra||0)+"% interest":""}</div></div>
+    <div><b class="${t==="income"?"pos":t==="expense"||t==="liability"?"neg":""}">${money(i.amount)}</b> <button class="x" data-del="${i.id}" aria-label="Delete">✕</button></div></div>`).join("")
+    : `<div class="empty">Nothing here yet. Fill in the form above to add your first entry.</div>`}</div>`;
+}
+
+document.addEventListener("click", e => {
+  if (e.target.dataset.t) { tab = e.target.dataset.t; render(); }
+  if (e.target.dataset.del && confirm("Delete this entry?")) { db.items = db.items.filter(i => i.id !== e.target.dataset.del); save(); }
+});
+document.addEventListener("submit", e => {
+  e.preventDefault();
+  const f = e.target, d = Object.fromEntries(new FormData(f));
+  db.items.push({id: crypto.randomUUID(), type: f.dataset.t, name: d.name, cat: d.cat, amount: +d.amount, extra: +d.extra || 0, date: d.date || ""});
+  save();
+});
+$("cur").oninput = e => { db.cur = e.target.value || "$"; save(); };
+$("exp").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(db)],{type:"application/json"})); a.download = "ledger-backup.json"; a.click(); };
+$("imp").onclick = () => $("file").click();
+$("file").onchange = async e => { try { const d = JSON.parse(await e.target.files[0].text()); if (Array.isArray(d.items)) { db = d; save(); } } catch(x){ alert("That file isn't a valid backup."); } };
+
+// ===== Google Drive sync (private app folder; only this app can see it) =====
+const FILE = "ledger-data.json", API = "https://www.googleapis.com";
+function status(m){ $("st").textContent = m; }
+
+$("sync").onclick = () => {
+  if (CLIENT_ID.startsWith("PASTE")) return alert("Add your Google Client ID at the top of index.html first.");
+  if (!window.google) return alert("Google sign-in is still loading. Try again in a moment.");
+  getToken(true).then(pull).catch(() => status("Sync failed"));
+};
+
+function getToken(interactive){
+  return new Promise((ok, no) => {
+    google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID, scope: "https://www.googleapis.com/auth/drive.appdata",
+      prompt: interactive ? "" : "none",
+      callback: r => { if (r.access_token) { token = r.access_token; tokenExp = Date.now() + (r.expires_in - 60) * 1000; localStorage.setItem("ledger-sync","1"); $("sync").textContent = "Synced with Drive"; ok(); } else no(r); }
+    }).requestAccessToken();
+  });
+}
+async function drive(path, opt = {}){
+  if (Date.now() > tokenExp) await getToken(false);
+  const r = await fetch(API + path, {...opt, headers: {Authorization: "Bearer " + token, ...(opt.headers||{})}});
+  if (!r.ok) throw new Error(r.status);
+  return r;
+}
+async function pull(){
+  status("Syncing…");
+  const q = await (await drive(`/drive/v3/files?spaces=appDataFolder&q=name='${FILE}'&fields=files(id)`)).json();
+  fileId = q.files[0] && q.files[0].id;
+  if (fileId) {
+    const remote = await (await drive(`/drive/v3/files/${fileId}?alt=media`)).json();
+    if (remote.updatedAt > db.updatedAt) { db = remote; localStorage.setItem(KEY, JSON.stringify(db)); render(); status("Loaded from Drive"); return; }
+  }
+  await push();
+}
+async function push(){
+  try {
+    const meta = fileId ? {} : {name: FILE, parents: ["appDataFolder"]};
+    const b = "x" + Date.now();
+    const body = `--${b}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(db)}\r\n--${b}--`;
+    const r = await drive(`/upload/drive/v3/files${fileId ? "/" + fileId : ""}?uploadType=multipart&fields=id`, {
+      method: fileId ? "PATCH" : "POST", headers: {"Content-Type": "multipart/related; boundary=" + b}, body });
+    fileId = (await r.json()).id;
+    status("Saved to Drive " + new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}));
+  } catch(e){ status("Drive save failed"); }
+}
+window.addEventListener("load", () => { if (localStorage.getItem("ledger-sync")) $("sync").textContent = "Reconnect Drive"; });
+render();
+</script>
+</body>
+</html>
