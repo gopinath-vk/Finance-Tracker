@@ -37,6 +37,8 @@ input,select{padding:8px;border:1px solid var(--line);border-radius:6px;backgrou
 #st{font-size:.85rem;color:var(--mute)}
 .empty{color:var(--mute);padding:8px 0}
 form[data-k=other] .mk,form[data-k=stock] .mo,form[data-k=mf] .mo,form:not([data-k=mf]) .mf{display:none}
+.mt{display:flex;gap:6px;margin:8px 0}.mt button{padding:4px 14px}
+.hd{display:flex;justify-content:space-between;align-items:center;width:100%;background:none;color:var(--ink);padding:0;border-radius:0;text-align:left}
 .tr{display:flex;gap:8px;margin-top:8px}.c{flex:1;text-align:center}
 .bs{height:90px;display:flex;gap:3px;align-items:flex-end}.bs i{flex:1;min-height:1px;border-radius:2px 2px 0 0}
 </style>
@@ -70,6 +72,7 @@ const TABS = {
   liability:{t: "Liabilities",a: "Balance owed", x: "Interest rate %", cat: ["Loan","Credit card","Mortgage","Other"]}
 };
 const KEY = "ledger-data";
+let expMonth = null, holdOpen = false;
 let tab = "overview", token = null, tokenExp = 0, fileId = null, timer = null;
 let db = load();
 
@@ -100,8 +103,10 @@ function overview(){
   const mi = db.items.filter(i => i.type==="income" && m(i)).reduce((s,i)=>s+i.amount,0);
   const me = db.items.filter(i => i.type==="expense" && m(i)).reduce((s,i)=>s+i.amount,0);
   const gain = inv - cost, nw = inv - debt;
+  const m3 = [2,1,0].map(k => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()-k); return d.toLocaleDateString("sv").slice(0,7); });
+  const sel = m3.includes(expMonth) ? expMonth : m3[2];
   const cats = {};
-  db.items.filter(i => i.type==="expense" && m(i)).forEach(i => cats[i.cat] = (cats[i.cat]||0) + i.amount);
+  db.items.filter(i => i.type==="expense" && i.date && i.date.startsWith(sel)).forEach(i => cats[i.cat] = (cats[i.cat]||0) + i.amount);
   const top = Math.max(1, ...Object.values(cats));
   const ms = [...Array(6)].map((_,k) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()-5+k); return d.toLocaleDateString("sv").slice(0,7); });
   const tot = (t,mm) => db.items.filter(i => i.type===t && i.date && i.date.startsWith(mm)).reduce((s,i) => s+i.amount, 0);
@@ -109,7 +114,7 @@ function overview(){
   const trend = `<div class="card"><div class="lab">Last 6 months: income (green) and expenses (red)</div><div class="tr">${ms.map(x => `<div class="c"><div class="bs"><i style="height:${tot("income",x)/tm*100}%;background:var(--pos)"></i><i style="height:${tot("expense",x)/tm*100}%;background:var(--neg)"></i></div><span class="lab">${new Date(x+"-15").toLocaleDateString(undefined,{month:"short"})}</span></div>`).join("")}</div></div>`;
   const upd = Math.max(0, ...db.items.map(i => i.priceAt||0));
   const hold = db.items.filter(i => i.type==="investment").sort((a,b) => b.amount-a.amount).map(i => { const g = i.amount-(i.extra||0); return `<div class="row"><span>${esc(i.name)}</span><span><b>${money(i.amount)}</b> <span class="${g<0?'neg':'pos'}">${i.extra ? (g/i.extra*100).toFixed(1)+"%" : ""}</span></span></div>`; }).join("");
-  const holdCard = `<div class="card"><div class="lab">Holdings ${upd ? "· prices updated " + new Date(upd).toLocaleString([], {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : ""}</div>${hold || '<div class="empty">No investments yet. Add one in Investments.</div>'}<button class="ghost" id="rp">Refresh prices</button> <span class="lab" id="pst"></span></div>`;
+  const holdCard = `<div class="card"><button class="hd" data-hold="1" aria-expanded="${holdOpen}"><span><span class="lab">Investments</span> <b>${money(sum("investment"))}</b></span><span class="lab">${holdOpen ? "Hide ▲" : "Show ▼"}</span></button>${holdOpen ? `<div class="lab" style="margin-top:8px">${upd ? "Prices updated " + new Date(upd).toLocaleString([], {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : ""}</div>${hold || '<div class="empty">No investments yet. Add one in Investments.</div>'}<button class="ghost" id="rp">Refresh prices</button> <span class="lab" id="pst"></span>` : ""}</div>`;
   return `<div class="card"><div class="lab">Net worth (investments minus liabilities)</div>
     <div class="big ${nw<0?'neg':''}">${money(nw)}</div></div>
   <div class="grid">
@@ -120,10 +125,12 @@ function overview(){
     <div class="card"><div class="lab">Total invested value</div><b>${money(inv)}</b></div>
     <div class="card"><div class="lab">Total liabilities</div><b class="neg">${money(debt)}</b></div>
   </div>
-  ${trend}${holdCard}<div class="card"><div class="lab">Where this month's money went</div>
+  ${trend}${holdCard}<div class="card"><div class="lab">Where the money went</div>
+  <div class="mt">${m3.map(x => `<button class="${x===sel?"":"ghost"}" data-em="${x}">${new Date(x+"-15").toLocaleDateString(undefined,{month:"short",year:"2-digit"})}</button>`).join("")}</div>
+  <div class="row" style="padding:0 0 4px;border:0"><span class="lab">Total spent</span><b class="neg">${money(Object.values(cats).reduce((a,b)=>a+b,0))}</b></div>
   ${Object.keys(cats).length ? Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([c,v]) =>
     `<div style="margin-top:8px"><div class="row" style="padding:0;border:0"><span>${esc(c)}</span><b>${money(v)}</b></div><div class="bar" style="width:${v/top*100}%"></div></div>`).join("")
-    : '<div class="empty">No expenses logged this month. Add one in Expenses.</div>'}</div>`;
+    : '<div class="empty">No expenses logged for this month.</div>'}</div>`;
 }
 
 function list(t){
@@ -253,7 +260,12 @@ async function autoSync(){
   if (localStorage.getItem("ledger-sync") && window.google) { try { await getToken(false); await pull(); } catch(e){ status("Saved on this device. Tap Reconnect Drive to sync."); } }
   refreshPrices();
 }
-document.addEventListener("click", e => { if (e.target.id === "rp") refreshPrices(); });
+document.addEventListener("click", e => {
+  if (e.target.id === "rp") refreshPrices();
+  const em = e.target.closest("[data-em]"), hd = e.target.closest("[data-hold]");
+  if (em) { expMonth = em.dataset.em; render(); }
+  if (hd) { holdOpen = !holdOpen; render(); }
+});
 window.addEventListener("online", autoSync);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) autoSync(); });
 window.addEventListener("load", () => setTimeout(autoSync, 1500));
