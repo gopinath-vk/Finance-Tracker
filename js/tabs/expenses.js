@@ -1,0 +1,1 @@
+registerTab("expense", "Expenses", () => ledgerView("expense", {t: "Expenses", a: "Amount", cat: ["Home","Transportation","Debt/EMI","Insurance","Medical","Tax","Rent","Recharge","Entertainment","Misc"]}));
