@@ -5,18 +5,7 @@ function registerTab(key, title, render, opts = {}) { TABS[key] = {t: title, ren
 let tab = "overview", editId = null, token = null, timer = null;
 let db = load();
 
-function load(){ try { const d = JSON.parse(localStorage.getItem(KEY)) || blank(); if (d.cur === "$") d.cur = "₹"; return migrate(d); } catch(e){ return blank(); } }
-// Older data had a separate "transfer" type. Self transfers now live in Income (money in) and Expenses (money out);
-// buying stocks/mutual funds is an Expense. Safe to run repeatedly.
-function migrate(d) {
-  if (!d.banks) d.banks = {date: "2026-01-01", bal: {}};
-  d.items = (d.items || []).map(i => {
-    if (i.type !== "transfer") return i;
-    if (i.cat === "Investments") return {...i, type: "expense", amount: -i.amount};
-    return i.amount >= 0 ? {...i, type: "income"} : {...i, type: "expense", amount: -i.amount};
-  });
-  return d;
-}
+function load(){ try { const d = JSON.parse(localStorage.getItem(KEY)) || blank(); if (d.cur === "$") d.cur = "₹"; if (!d.banks) d.banks = {date: "2026-01-01", bal: {}}; return d; } catch(e){ return blank(); } }
 function blank(){ return {updatedAt: 0, cur: "₹", banks: {date: "2026-01-01", bal: {}}, items: []}; }
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -62,4 +51,4 @@ document.addEventListener("submit", e => {
 $("cur").oninput = e => { db.cur = e.target.value || "₹"; save(); };
 $("exp").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(db)],{type:"application/json"})); a.download = "ledger-backup.json"; a.click(); };
 $("imp").onclick = () => $("file").click();
-$("file").onchange = async e => { try { const d = JSON.parse(await e.target.files[0].text()); if (Array.isArray(d.items)) { db = migrate(d); save(); } } catch(x){ alert("That file isn't a valid backup."); } };
+$("file").onchange = async e => { try { const d = JSON.parse(await e.target.files[0].text()); if (Array.isArray(d.items)) { db = d; save(); } } catch(x){ alert("That file isn't a valid backup."); } };
