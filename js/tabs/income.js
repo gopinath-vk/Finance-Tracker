@@ -1,1 +1,1 @@
-registerTab("income", "Income", () => ledgerView("income", {t: "Income", a: "Amount", cat: ["Salary","Business","Interest","Other"]}));
+registerTab("income", "Income", () => ledgerView("income", {t: "Income", a: "Amount", cat: ["Salary","Investment","Interest","Other"]}));
