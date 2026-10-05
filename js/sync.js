@@ -30,7 +30,7 @@ async function pull(){
   fileId = q.files[0] && q.files[0].id;
   if (fileId) {
     const remote = await (await drive(`/drive/v3/files/${fileId}?alt=media`)).json();
-    if (remote.updatedAt > db.updatedAt) { db = remote; localStorage.setItem(KEY, JSON.stringify(db)); render(); status("Loaded from Drive"); return; }
+    if (remote.updatedAt > db.updatedAt) { db = migrate(remote); localStorage.setItem(KEY, JSON.stringify(db)); render(); status("Loaded from Drive"); return; }
   }
   await push();
 }
