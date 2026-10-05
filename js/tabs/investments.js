@@ -8,12 +8,12 @@ function invList(items){
     <input class="mf" id="mfq" placeholder="Search fund name" autocomplete="off">
     <select class="mf" id="mfr"><option value="">Pick a fund</option></select>
     <input name="name" placeholder="Name" value="${ed ? esc(ed.name) : ""}" required>
-    <input class="mk" name="sym" placeholder="NSE symbol (TCS) or fund code" value="${ed ? esc(ed.sym||"") : ""}">
+    <input class="mk" name="sym" placeholder="NSE Ticker" value="${ed ? esc(ed.sym||"") : ""}">
     <input class="mk" name="units" type="number" step="any" placeholder="Units / shares" value="${ed ? val(ed.units) : ""}">
     <input class="mo" name="amount" type="number" step="any" placeholder="Current value" value="${ed && !ed.sym ? ed.amount : ""}">
     <input name="extra" type="number" step="any" placeholder="Amount invested" value="${ed ? val(ed.extra) : ""}">
-    <button>${ed ? "Save changes" : "Add investment"}</button>${ed ? '<button type="button" class="ghost" data-cancel="1">Cancel</button>' : ""}</form>
-  <div class="card"><button class="ghost" id="rp">Refresh prices</button> <span class="lab" id="pst"></span>${rows}</div>`;
+    <button>${ed ? "Save Changes" : "Add Investment"}</button>${ed ? '<button type="button" class="ghost" data-cancel="1">Cancel</button>' : ""}</form>
+  <div class="card"><button class="ghost" id="rp">Refresh Prices</button> <span class="lab" id="pst"></span>${rows}</div>`;
 }
 
 // Validate/adjust an investment entry before it is saved (called by the shared submit handler in core.js).
