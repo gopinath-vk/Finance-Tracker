@@ -1,5 +1,5 @@
 // Dashboard tab: net worth, bank balances, monthly stats, charts, holdings.
-let expMonth = null, holdOpen = false;
+let expMonth = null, holdOpen = false, bankOpen = localStorage.getItem("ledger-bankopen") !== "0";
 
 function balances(){
   const b = db.banks || {date: "2026-01-01", bal: {}}, out = {...b.bal};
@@ -14,7 +14,7 @@ function overview(){
   const me = db.items.filter(i => i.type==="expense" && m(i)).reduce((s,i)=>s+i.amount,0);
   const bals = balances(), bt = Object.values(bals).reduce((a,b) => a+b, 0);
   const gain = inv - cost, nw = inv + bt - debt;
-  const bankCards = `<div class="lab" style="margin:4px 0 6px">Bank balances · total <b class="${bt<0?'neg':''}">${money(bt)}</b> <span>(tap a card to set its opening balance)</span></div><div class="grid" style="margin-bottom:14px">${Object.entries(bals).map(([n,v]) => `<div class="card" style="margin:0;cursor:pointer" data-bank="${esc(n)}"><div class="lab">${esc(n)}${n==="CC"?" (credit card)":""}</div><b class="${v<0?'neg':''}">${money(v)}</b></div>`).join("")}</div>`;
+  const bankCards = `<button class="hd" data-bankhd="1" aria-expanded="${bankOpen}" style="margin:4px 0 8px"><span><span class="lab">Bank balances · total</span> <b class="${bt<0?'neg':''}">${money(bt)}</b></span><span class="lab">${bankOpen ? "Hide ▲" : "Show ▼"}</span></button>${bankOpen ? `<div class="lab" style="margin-bottom:6px">Tap a card to set its opening balance</div><div class="grid" style="margin-bottom:14px">${Object.entries(bals).map(([n,v]) => `<div class="card" style="margin:0;cursor:pointer" data-bank="${esc(n)}"><div class="lab">${esc(n)}${n==="CC"?" (credit card)":""}</div><b class="${v<0?'neg':''}">${money(v)}</b></div>`).join("")}</div>` : '<div style="margin-bottom:14px"></div>'}`;
   const m3 = [2,1,0].map(k => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()-k); return d.toLocaleDateString("sv").slice(0,7); });
   const sel = m3.includes(expMonth) ? expMonth : m3[2];
   const cats = {};
@@ -52,6 +52,7 @@ document.addEventListener("click", e => {
   const bk = e.target.closest("[data-bank]");
   if (bk) { const n = bk.dataset.bank, cur = (db.banks.bal[n] || 0), v = prompt(`Opening balance of ${n} on ${db.banks.date} (the app adds later entries to it):`, cur);
     if (v !== null && v.trim() !== "" && !isNaN(+v)) { db.banks.bal[n] = +v; save(); } }
+  if (e.target.closest("[data-bankhd]")) { bankOpen = !bankOpen; localStorage.setItem("ledger-bankopen", bankOpen ? "1" : "0"); render(); }
   const em = e.target.closest("[data-em]"), hd = e.target.closest("[data-hold]");
   if (em) { expMonth = em.dataset.em; render(); }
   if (hd) { holdOpen = !holdOpen; render(); }
