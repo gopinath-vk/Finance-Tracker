@@ -19,7 +19,8 @@ function invList(allItems){
   const platforms = [...new Set(allItems.map(i => i.platform).filter(Boolean))];
 
   const byCat = {}; allItems.forEach(i => byCat[i.cat||"Other"] = (byCat[i.cat||"Other"]||0) + i.amount);
-  const chips = `<div class="chips"><button class="${invHoldCat==="all"?"on":""}" data-invholdcat="all">All</button>${INV_CATS.filter(c => byCat[c]).map(c => `<button class="${invHoldCat===c?"on":""}" data-invholdcat="${esc(c)}">${esc(c)} · ${money(byCat[c])}</button>`).join("")}</div>`;
+  const presentCats = [...new Set([...INV_CATS.filter(c => byCat[c]), ...Object.keys(byCat).filter(c => !INV_CATS.includes(c))])];
+  const chips = `<div class="chips"><button class="${invHoldCat==="all"?"on":""}" data-invholdcat="all">All</button>${presentCats.map(c => `<button class="${invHoldCat===c?"on":""}" data-invholdcat="${esc(c)}">${esc(c)} · ${money(byCat[c])}</button>`).join("")}</div>`;
   const shown = invHoldCat==="all" ? allItems : allItems.filter(i => (i.cat||"Other")===invHoldCat);
   const rows = shown.length ? shown.sort((a,b) => (b.date||"").localeCompare(a.date||"")).map(i => `<div class="row"><div>${esc(i.name)}<div class="lab">${esc(i.cat||"Other")}${i.platform?" · "+esc(i.platform):""}${i.sym ? " · "+esc(i.sym)+" · "+i.units+" units @ "+(i.price ? money(i.price) : "waiting for price") : " · Manual value"}${i.date?" · "+i.date:""} · invested ${money(i.extra||0)}</div></div><div><b>${money(i.amount)}</b> ${acts(i)}</div></div>`).join("") : '<div class="empty">Nothing in this category yet.</div>';
 
