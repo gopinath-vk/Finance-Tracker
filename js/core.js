@@ -11,6 +11,7 @@ function load(){ try { const d = JSON.parse(localStorage.getItem(KEY)) || blank(
 // buying stocks/mutual funds is an Expense. Safe to run repeatedly.
 function migrate(d) {
   if (!d.banks) d.banks = {date: "2026-01-01", bal: {}};
+  if (!d.priceHistory) d.priceHistory = {};
   d.items = (d.items || []).map(i => {
     if (i.type !== "transfer") return i;
     if (i.cat === "Investments") return {...i, type: "expense", amount: -i.amount};
@@ -18,7 +19,7 @@ function migrate(d) {
   });
   return d;
 }
-function blank(){ return {updatedAt: 0, cur: "₹", banks: {date: "2026-01-01", bal: {}}, items: []}; }
+function blank(){ return {updatedAt: 0, cur: "₹", banks: {date: "2026-01-01", bal: {}}, priceHistory: {}, items: []}; }
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const money = n => hideAmounts ? "••••" : (n < 0 ? "-" : "") + db.cur + Math.abs(n).toLocaleString("en-IN",{maximumFractionDigits:2});
