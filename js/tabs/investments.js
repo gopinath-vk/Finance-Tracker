@@ -40,33 +40,7 @@ function positions(items){
   }).sort((a,b) => b.value - a.value);
 }
 
-function posChart(pos){
-  const iv = pos.lots.filter(l => l.date).sort((a,b) => a.date.localeCompare(b.date));
-  let invCard = "";
-  if (iv.length > 1) {
-    let run = 0; const vals = iv.map(l => run += (l.extra||0));
-    const lbl = iv.map(l => new Date(l.date).toLocaleDateString(undefined,{day:"numeric",month:"short"}));
-    invCard = `<div class="lab" style="margin-top:10px">Invested over time</div>${lineChart([{name:"Invested", color:"var(--ink)", values: vals}], lbl, 90)}`;
-  }
-  const key = pos.kind==="gold" ? "GOLD" : pos.sym;
-  const hist = key && db.priceHistory[key] || [];
-  let priceCard = "";
-  if (hist.length > 1) {
-    const lbl = hist.map(h => new Date(h.date).toLocaleDateString(undefined,{day:"numeric",month:"short"}));
-    priceCard = `<div class="lab" style="margin-top:10px">Price movement (tracked since you started refreshing)</div>${lineChart([{name:"Price", color:"var(--pos)", values: hist.map(h => h.price)}], lbl, 90)}`;
-  } else if (pos.kind) {
-    priceCard = `<div class="lab" style="margin-top:10px">Price history will build up each time you refresh prices.</div>`;
-  }
-  return invCard + priceCard;
-}
 
-function invChart(items){
-  const ms = [...Array(6)].map((_,k) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()-5+k); return d.toLocaleDateString("sv").slice(0,7); });
-  const lbl = ms.map(x => new Date(x+"-15").toLocaleDateString(undefined,{month:"short"}));
-  const vals = ms.map(mm => items.filter(i => i.date && i.date.startsWith(mm)).reduce((s,i) => s+(i.extra||0), 0));
-  if (!vals.some(v => v > 0)) return "";
-  return `<div class="card"><div class="lab">Monthly invested — last 6 months${invHoldCat!=="all" ? " · "+esc(invHoldCat) : ""}</div>${lineChart([{name:"Invested", color:"var(--pos)", values: vals}], lbl)}</div>`;
-}
 
 function invList(allItems){
   const ed = editId && allItems.find(i => i.id === editId);
@@ -89,7 +63,7 @@ function invList(allItems){
         <span><b>${esc(p.name)}</b><div class="lab">${esc(p.cat)}${p.platform?" · "+esc(p.platform):""}${p.units?" · "+p.units+" units":""}${p.price?" · "+money(p.price)+(p.kind?"/"+(p.kind==="gold"?"g":"unit"):""):""}</div></span>
         <span style="text-align:right"><b>${money(p.value)}</b><div class="lab ${g!==null&&g<0?'neg':'pos'}">${g!==null ? g.toFixed(1)+"%" : ""}${x!==null ? " · XIRR "+x.toFixed(1)+"%" : ""}</div></span>
       </button>
-      ${open ? `<div class="lab" style="margin-top:8px">Invested ${money(p.invested)} · Current ${money(p.value)} · P&L ${g!==null?money(p.value-p.invested)+" ("+g.toFixed(1)+"%)":"—"}${x!==null?" · XIRR "+x.toFixed(1)+"%":""}</div>${posChart(p)}<div style="margin-top:8px">${lotRows}</div>` : ""}
+      ${open ? `<div class="lab" style="margin-top:8px">Invested ${money(p.invested)} · Current ${money(p.value)} · P&L ${g!==null?money(p.value-p.invested)+" ("+g.toFixed(1)+"%)":"—"}${x!==null?" · XIRR "+x.toFixed(1)+"%":""}</div><div style="margin-top:8px">${lotRows}</div>` : ""}
     </div>`;
   }).join("");
 
@@ -103,13 +77,14 @@ function invList(allItems){
     <input name="name" placeholder="Name" value="${ed ? esc(ed.name) : ""}" required>
     <input class="sy" name="sym" placeholder="NSE symbol (TCS) or fund code" value="${ed ? esc(ed.sym||"") : ""}">
     <input class="un" name="units" type="number" step="any" placeholder="${k==='gold'?'Grams purchased':'Units / shares'}" value="${ed ? val(ed.units) : ""}">
+    <input class="pu" name="navprice" type="number" step="any" placeholder="${k==='mf'?'NAV at purchase':'Buy price per unit'} (optional)">
     <input class="mo" name="amount" type="number" step="any" placeholder="Current value" value="${ed && !ed.sym ? ed.amount : ""}">
-    <input name="extra" type="number" step="any" placeholder="Amount invested this entry" value="${ed ? val(ed.extra) : ""}">
+    <input class="pu-alt" name="extra" type="number" step="any" placeholder="Or: amount invested this entry" value="${ed ? val(ed.extra) : ""}">
     <input name="platform" list="plats" placeholder="Platform (Zerodha, Groww...)" value="${ed ? esc(ed.platform||"") : ""}"><datalist id="plats">${platforms.map(x => `<option value="${esc(x)}">`).join("")}</datalist>
     <input name="date" type="date" value="${ed ? (ed.date||"") : new Date().toLocaleDateString("sv")}">
     <button>${ed ? "Save changes" : "Add investment"}</button>${ed ? '<button type="button" class="ghost" data-cancel="1">Cancel</button>' : ""}</form>
-  <div class="lab" style="margin:4px 0 8px">Add a new entry each time you invest (e.g. monthly SIP) — each one is a dated purchase, grouped below by holding.</div>
-  ${chips}${invChart(shownItems)}
+  <div class="lab" style="margin:4px 0 8px">Add a new entry each time you invest (e.g. monthly SIP) — each one is a dated purchase, grouped below by holding. Enter the NAV/price and units, or just the amount invested — whichever you have.</div>
+  ${chips}
   <div style="margin-top:8px"><button class="ghost" id="rp">Refresh prices</button> <span class="lab" id="pst"></span></div>
   <div style="margin-top:10px">${posRows || '<div class="empty">No investments in this category.</div>'}</div>`;
 }
@@ -119,14 +94,17 @@ function beforeSaveInvestment(it, d, old) {
   it.cat = it.cat === "Other" ? (d.catother || "Other").trim() : it.cat;
   it.platform = (d.platform || "").trim();
   if (d.kind === "other") { it.kind = undefined; it.sym = undefined; it.units = undefined; return; }
+  const nav = +d.navprice || 0;
   if (d.kind === "gold") {
     it.kind = "gold"; it.sym = "GOLD"; it.units = +d.units || 0;
     if (!it.units) { alert("Enter the grams purchased."); return false; }
+    if (nav) it.extra = +(nav * it.units).toFixed(2);
     if (old && old.kind === "gold" && old.price) { it.price = old.price; it.priceAt = old.priceAt; it.amount = +(old.price * it.units).toFixed(2); } else it.amount = 0;
     return;
   }
   it.kind = d.kind; it.sym = (d.sym||"").trim(); it.units = +d.units || 0;
   if (!it.sym || !it.units) { alert("Enter the symbol or fund code, and the units."); return false; }
+  if (nav) it.extra = +(nav * it.units).toFixed(2);
   if (old && old.sym === it.sym && old.price) { it.price = old.price; it.priceAt = old.priceAt; it.amount = +(old.price * it.units).toFixed(2); } else it.amount = 0;
 }
 registerTab("investment", "Investments", () => invList(db.items.filter(i => i.type === "investment")), {beforeSave: beforeSaveInvestment});
