@@ -4,6 +4,23 @@ const TABS = {};   // each file in js/tabs/ registers itself here, in the order 
 function registerTab(key, title, render, opts = {}) { TABS[key] = {t: title, render, ...opts}; }
 let tab = "overview", editId = null, token = null, timer = null;
 let hideAmounts = localStorage.getItem("ledger-hide") === "1";
+
+// Item name -> category, used to auto-suggest a category as you type an entry's name (see suggestCat in ledger.js).
+// Lives in db (not hardcoded) so it syncs across devices and the person can add to or edit it from the Expenses tab.
+const DEFAULT_CAT_MAP = {
+  "cc bill":"Debt/EMI","loan closure":"Debt/EMI","loan emi/interest":"Debt/EMI","loan":"Debt/EMI",
+  "movie":"Entertainment","ott":"Entertainment",
+  "grocery":"Home","home - others":"Home","monthly exp":"Home","outside food":"Home","edu - aadhi":"Home",
+  "bank interest":"Income","bayer salary":"Income","other income":"Income","investment return":"Income",
+  "insurance":"Insurance",
+  "chit":"Investments","mf/stocks":"Investments","fd":"Investments",
+  "hospital":"Medical","medicine":"Medical",
+  "bank charges":"Misc","mozhi":"Misc","temple expenses":"Misc","electrical/gadget":"Misc","unexpected":"Misc",
+  "internet":"Recharge","mobile":"Recharge","rajagopal - recharge":"Recharge",
+  "house rent":"Rent","rent advance":"Rent",
+  "income tax":"Tax","panchayat tax":"Tax",
+  "bike service":"Transportation","petrol":"Transportation","travel":"Transportation"
+};
 let db = load();
 
 function load(){ try { const d = JSON.parse(localStorage.getItem(KEY)) || blank(); if (d.cur === "$") d.cur = "₹"; return migrate(d); } catch(e){ return blank(); } }
@@ -12,6 +29,7 @@ function load(){ try { const d = JSON.parse(localStorage.getItem(KEY)) || blank(
 function migrate(d) {
   if (!d.banks) d.banks = {date: "2026-01-01", bal: {}};
   if (!d.priceHistory) d.priceHistory = {};
+  if (!d.catMap) d.catMap = {...DEFAULT_CAT_MAP};
   d.items = (d.items || []).map(i => {
     if (i.type !== "transfer") return i;
     if (i.cat === "Investments") return {...i, type: "expense", amount: -i.amount};
@@ -19,7 +37,7 @@ function migrate(d) {
   });
   return d;
 }
-function blank(){ return {updatedAt: 0, cur: "₹", banks: {date: "2026-01-01", bal: {}}, priceHistory: {}, items: []}; }
+function blank(){ return {updatedAt: 0, cur: "₹", banks: {date: "2026-01-01", bal: {}}, priceHistory: {}, catMap: {...DEFAULT_CAT_MAP}, items: []}; }
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const money = n => hideAmounts ? "••••" : (n < 0 ? "-" : "") + db.cur + Math.abs(n).toLocaleString("en-IN",{maximumFractionDigits:2});
@@ -66,8 +84,10 @@ $("hide").textContent = hideAmounts ? "🙈" : "👁";
 
 // One submit handler for every form; a tab can validate/adjust its entry with opts.beforeSave(entry, formData, oldEntry).
 document.addEventListener("submit", e => {
+  const f = e.target;
+  if (!f.dataset.t) return;   // other forms (loan payments, transfers, category map) handle their own submit
   e.preventDefault();
-  const f = e.target, d = Object.fromEntries(new FormData(f));
+  const d = Object.fromEntries(new FormData(f));
   const old = editId && db.items.find(i => i.id === editId);
   const it = {id: old ? old.id : crypto.randomUUID(), type: f.dataset.t, name: d.name, cat: d.cat || d.kind, amount: +d.amount || 0, extra: +d.extra || 0, date: d.date || ""};
   if (d.source !== undefined) it.source = d.source.trim();
