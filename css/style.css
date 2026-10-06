@@ -31,3 +31,8 @@ form[data-k=other] .mk,form[data-k=stock] .mo,form[data-k=mf] .mo,form:not([data
 .hd{display:flex;justify-content:space-between;align-items:center;width:100%;background:none;color:var(--ink);padding:0;border-radius:0;text-align:left}
 .tr{display:flex;gap:8px;margin-top:8px}.c{flex:1;text-align:center}
 .bs{height:90px;display:flex;gap:3px;align-items:flex-end}.bs i{flex:1;min-height:1px;border-radius:2px 2px 0 0}
+button.danger{border:1px solid var(--neg);color:var(--neg)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.chips button{padding:5px 12px;background:none;color:var(--ink);border:1px solid var(--line);border-radius:999px}
+.chips button.on{background:var(--acc);color:var(--bg);border-color:var(--acc)}
+.pair{display:flex;align-items:center;gap:6px}
