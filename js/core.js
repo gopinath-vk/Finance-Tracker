@@ -23,6 +23,7 @@ function blank(){ return {updatedAt: 0, cur: "₹", banks: {date: "2026-01-01", 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const money = n => hideAmounts ? "••••" : (n < 0 ? "-" : "") + db.cur + Math.abs(n).toLocaleString("en-IN",{maximumFractionDigits:2});
+const shortMoney = n => hideAmounts ? "••••" : (n < 0 ? "-" : "") + db.cur + Math.round(Math.abs(n)).toLocaleString("en-IN");
 const sum = (t, f = i => i.amount) => db.items.filter(i => i.type === t).reduce((s, i) => s + f(i), 0);
 const month = () => new Date().toLocaleDateString("sv").slice(0,7);
 const acts = i => `<button class="x" data-edit="${i.id}" aria-label="Edit">✎</button><button class="x" data-del="${i.id}" aria-label="Delete">✕</button>`;
@@ -36,16 +37,17 @@ function save(){
 }
 
 // Draws a simple multi-series line chart. series: [{name,color,values:[...]}], labels: x-axis labels (same length as values).
-function lineChart(series, labels, h = 110){
-  const w = 600, pad = 6, n = labels.length;
+function lineChart(series, labels, h = 110, fmt = null){
+  const w = 600, pad = 6, topPad = fmt ? 14 * series.length + 6 : pad, n = labels.length;
   const all = series.flatMap(s => s.values);
   const max = Math.max(1, ...all), min = Math.min(0, ...all);
   const x = i => n > 1 ? pad + i * (w - pad*2) / (n-1) : w/2;
-  const y = v => h - pad - (v - min) / (max - min || 1) * (h - pad*2);
+  const y = v => h - pad - (v - min) / (max - min || 1) * (h - pad - topPad);
   const lines = series.map(s => `<polyline fill="none" stroke="${s.color}" stroke-width="2" points="${s.values.map((v,i) => x(i)+","+y(v)).join(" ")}"/>`).join("");
   const dots = series.map(s => s.values.map((v,i) => `<circle cx="${x(i)}" cy="${y(v)}" r="2.5" fill="${s.color}"/>`).join("")).join("");
+  const text = fmt ? series.map((s,si) => s.values.map((v,i) => `<text x="${x(i)}" y="${y(v)-8-si*13}" font-size="11" text-anchor="middle" fill="${s.color}">${esc(fmt(v))}</text>`).join("")).join("") : "";
   const lbl = labels.map((l,i) => `<div class="c" style="position:absolute;left:${x(i)/w*100}%;transform:translateX(-50%)">${esc(l)}</div>`).join("");
-  return `<div style="position:relative"><svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block">${lines}${dots}</svg><div class="lab" style="position:relative;height:16px;margin-top:2px">${lbl}</div></div>`;
+  return `<div style="position:relative"><svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block">${lines}${dots}${text}</svg><div class="lab" style="position:relative;height:16px;margin-top:2px">${lbl}</div></div>`;
 }
 function render(){
   $("nav").innerHTML = Object.entries(TABS).map(([k,v]) => `<button class="${k===tab?'on':''}" data-t="${k}">${v.t}</button>`).join("");
