@@ -27,7 +27,7 @@ function overview(){
   const trend = `<div class="card"><div class="lab">Last 6 months: income (green) and expenses (red)</div>${lineChart([
     {name:"Income", color:"var(--pos)", values: ms.map(x => tot("income",x))},
     {name:"Expenses", color:"var(--neg)", values: ms.map(x => tot("expense",x))}
-  ], mlbl)}</div>`;
+  ], mlbl, 130, v => shortMoney(v))}</div>`;
   const upd = Math.max(0, ...db.items.map(i => i.priceAt||0));
   const allInv = db.items.filter(i => i.type==="investment");
   const invCats = [...new Set(allInv.map(i => i.cat || "Other"))];
