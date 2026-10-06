@@ -2,26 +2,13 @@
 // Self transfers (TR/WD) and credit card bill payments (CC Bill) live in the Transfers tab, not here.
 let fy = String(new Date().getFullYear()), fm = String(new Date().getMonth()+1).padStart(2,"0"), ecat = "all";
 
-// Auto-suggested category by item name, from the person's own naming patterns. Matched as a prefix, case-insensitive,
-// longest match wins (so "Loan EMI/Interest" beats "Loan"). Only applied while adding/editing — never overrides silently,
-// the person can still pick a different category before saving.
-const CAT_MAP = Object.entries({
-  "cc bill":"Debt/EMI","loan closure":"Debt/EMI","loan emi/interest":"Debt/EMI","loan":"Debt/EMI",
-  "movie":"Entertainment","ott":"Entertainment",
-  "grocery":"Home","home - others":"Home","monthly exp":"Home","outside food":"Home","edu - aadhi":"Home",
-  "bank interest":"Income","bayer salary":"Income","other income":"Income","investment return":"Income",
-  "insurance":"Insurance",
-  "chit":"Investments","mf/stocks":"Investments","fd":"Investments",
-  "hospital":"Medical","medicine":"Medical",
-  "bank charges":"Misc","mozhi":"Misc","temple expenses":"Misc","electrical/gadget":"Misc","unexpected":"Misc",
-  "internet":"Recharge","mobile":"Recharge","rajagopal - recharge":"Recharge",
-  "house rent":"Rent","rent advance":"Rent",
-  "income tax":"Tax","panchayat tax":"Tax",
-  "bike service":"Transportation","petrol":"Transportation","travel":"Transportation"
-}).sort((a,b) => b[0].length - a[0].length);
+// Auto-suggested category by item name, from db.catMap (editable in the Expenses tab). Matched as a prefix,
+// case-insensitive, longest match wins (so "Loan EMI/Interest" beats "Loan"). Only applied while adding/editing —
+// never overrides silently, the person can still pick a different category before saving.
 function suggestCat(name){
   const n = name.trim().toLowerCase();
-  const hit = CAT_MAP.find(([k]) => n.startsWith(k));
+  const entries = Object.entries(db.catMap || {}).sort((a,b) => b[0].length - a[0].length);
+  const hit = entries.find(([k]) => n.startsWith(k));
   return hit ? hit[1] : null;
 }
 const MN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
