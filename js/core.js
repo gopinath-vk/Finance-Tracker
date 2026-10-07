@@ -21,6 +21,16 @@ const DEFAULT_CAT_MAP = {
   "income tax":"Tax","panchayat tax":"Tax",
   "bike service":"Transportation","petrol":"Transportation","travel":"Transportation"
 };
+// Seeded once from the bank-total-by-month figures in the person's own spreadsheet (2025/2026 Bal Sheet summary
+// tabs). This is bank balance only, not full net worth — investment and liability values weren't tracked month
+// by month in the sheet. From the month the app started tracking, entries are the real net worth instead
+// (investments + banks - liabilities), kept up to date automatically — see updateNetWorthHistory() in dashboard.js.
+const SEED_NET_WORTH = [
+  ["2025-01",90574.2],["2025-02",73436.9],["2025-03",205129.2],["2025-04",50674.3],["2025-05",204779.8],["2025-06",186842.2],
+  ["2025-07",236342.9],["2025-08",242243.5],["2025-09",382441.8],["2025-10",399342.5],["2025-11",234944.8],["2025-12",244910.2],
+  ["2026-01",256178.9],["2026-02",198140.1],["2026-03",230992.2],["2026-04",251155.1],["2026-05",-80282.0],["2026-06",30461.8],
+  ["2026-07",211956.7],["2026-08",186475.0],["2026-09",105964.3]
+].map(([date,value]) => ({date, value}));
 let db = load();
 
 function load(){ try { const d = JSON.parse(localStorage.getItem(KEY)) || blank(); if (d.cur === "$") d.cur = "₹"; return migrate(d); } catch(e){ return blank(); } }
@@ -30,6 +40,8 @@ function migrate(d) {
   if (!d.banks) d.banks = {date: "2026-01-01", bal: {}};
   if (!d.priceHistory) d.priceHistory = {};
   if (!d.catMap) d.catMap = {...DEFAULT_CAT_MAP};
+  if (!d.netWorth || !d.netWorth.length) d.netWorth = SEED_NET_WORTH.map(e => ({...e}));
+  if (!d.idealAlloc) d.idealAlloc = {};
   d.items = (d.items || []).map(i => {
     if (i.type !== "transfer") return i;
     if (i.cat === "Investments") return {...i, type: "expense", amount: -i.amount};
@@ -37,7 +49,7 @@ function migrate(d) {
   });
   return d;
 }
-function blank(){ return {updatedAt: 0, cur: "₹", banks: {date: "2026-01-01", bal: {}}, priceHistory: {}, catMap: {...DEFAULT_CAT_MAP}, items: []}; }
+function blank(){ return {updatedAt: 0, cur: "₹", banks: {date: "2026-01-01", bal: {}}, priceHistory: {}, catMap: {...DEFAULT_CAT_MAP}, netWorth: SEED_NET_WORTH.map(e => ({...e})), idealAlloc: {}, items: []}; }
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const money = n => hideAmounts ? "••••" : (n < 0 ? "-" : "") + db.cur + Math.abs(n).toLocaleString("en-IN",{maximumFractionDigits:2});
@@ -73,8 +85,11 @@ function render(){
   $("view").innerHTML = TABS[tab] ? TABS[tab].render() : "";
 }
 
+function closeDrawer(){ $("drawer").classList.remove("open"); $("backdrop").classList.remove("open"); }
+$("menu").onclick = () => { $("drawer").classList.toggle("open"); $("backdrop").classList.toggle("open"); };
+$("backdrop").onclick = closeDrawer;
 document.addEventListener("click", e => {
-  if (e.target.dataset.t) { tab = e.target.dataset.t; editId = null; render(); }
+  if (e.target.dataset.t) { tab = e.target.dataset.t; editId = null; render(); closeDrawer(); }
   if (e.target.dataset.edit) { editId = e.target.dataset.edit; render(); scrollTo(0, 0); }
   if (e.target.dataset.cancel) { editId = null; render(); }
   if (e.target.dataset.del && confirm("Delete this entry?")) { if (editId === e.target.dataset.del) editId = null; db.items = db.items.filter(i => i.id !== e.target.dataset.del); save(); }
