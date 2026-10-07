@@ -1,6 +1,6 @@
 // Expenses tab: spend-by-category chart, the ledger list (with category filter), and a manager for the
 // item-name -> category auto-suggestions (db.catMap) — collapsed by default, expand to add/edit/delete.
-let mapOpen = false, mapEdit = null;
+let mapOpen = false, mapEdit = null, chartOpen = localStorage.getItem("ledger-expchartopen") !== "0";
 
 // Shows the whole year's spending by category, regardless of which month is selected in the filter above.
 function expenseChart(){
@@ -8,10 +8,11 @@ function expenseChart(){
     (fy==="all" || i.date.startsWith(fy)));
   const cats = {}; items.forEach(i => cats[i.cat] = (cats[i.cat]||0) + i.amount);
   const entries = Object.entries(cats).sort((a,b) => b[1]-a[1]);
-  if (!entries.length) return "";
   const top = Math.max(1, ...entries.map(e => e[1]));
-  return `<div class="card"><div class="lab">Spending by category · ${fy==="all" ? "all years" : fy}</div>${entries.map(([c,v]) =>
-    `<div style="margin-top:8px"><div class="row" style="padding:0;border:0"><span>${esc(c)}</span><b>${money(v)}</b></div><div class="bar" style="width:${v/top*100}%"></div></div>`).join("")}</div>`;
+  return `<div class="card"><button class="hd" data-exphd="1" aria-expanded="${chartOpen}"><span class="lab">Spending by category · ${fy==="all" ? "all years" : fy}</span><span class="lab">${chartOpen?"Hide ▲":"Show ▼"}</span></button>
+  ${chartOpen ? (entries.length ? `<div style="margin-top:8px">${entries.map(([c,v]) =>
+    `<div style="margin-top:8px"><div class="row" style="padding:0;border:0"><span>${esc(c)}</span><b>${money(v)}</b></div><div class="bar" style="width:${v/top*100}%"></div></div>`).join("")}</div>`
+    : '<div class="empty">No expenses for this period.</div>') : ""}</div>`;
 }
 
 function catMapCard(cats){
@@ -35,6 +36,7 @@ registerTab("expense", "Expenses", () => {
 });
 
 document.addEventListener("click", e => {
+  if (e.target.closest("[data-exphd]")) { chartOpen = !chartOpen; localStorage.setItem("ledger-expchartopen", chartOpen ? "1" : "0"); render(); }
   if (e.target.closest("[data-maphd]")) { mapOpen = !mapOpen; render(); }
   if (e.target.dataset.mapcancel) { mapEdit = null; render(); }
   if (e.target.dataset.mapedit) { mapEdit = e.target.dataset.mapedit; mapOpen = true; render(); scrollTo(0, document.body.scrollHeight); }

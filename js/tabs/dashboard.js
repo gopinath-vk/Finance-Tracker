@@ -1,5 +1,5 @@
 // Dashboard tab: net worth, bank balances, monthly stats, charts, holdings.
-let expMonth = null, holdOpen = false, holdCat = "all", nwOpen = false;
+let expMonth = null, holdOpen = false, holdCat = "all", nwOpen = false, nwPage = 0;
 let bankOpen = localStorage.getItem("ledger-bankopen") !== "0", statsOpen = localStorage.getItem("ledger-statsopen") !== "0";
 
 function balances(){
@@ -17,10 +17,14 @@ function updateNetWorthHistory(nw){
   queueMicrotask(save);
 }
 function netWorthChart(){
-  const pts = db.netWorth.slice(-18);
+  const PAGE = 6, all = db.netWorth, pages = Math.max(1, Math.ceil(all.length / PAGE));
+  const page = Math.min(nwPage, pages - 1);
+  const start = Math.max(0, all.length - PAGE * (page + 1)), end = all.length - PAGE * page;
+  const pts = all.slice(start, end);
   const lbl = pts.map(e => new Date(e.date+"-15").toLocaleDateString(undefined,{month:"short",year:"2-digit"}));
-  return `<div class="lab" style="margin-top:8px">Before ${month()}, this reflects bank balances only from your spreadsheet (investments/liabilities weren\'t tracked monthly there). From this month on, it\'s your real net worth.</div>
-    ${lineChart([{name:"Net worth", color:"var(--acc)", values: pts.map(e => e.value)}], lbl, 140, v => shortMoney(v))}`;
+  return `<div class="lab" style="margin-top:8px">Before ${month()}, this reflects bank balances only from your spreadsheet (investments/liabilities weren't tracked monthly there). From this month on, it's your real net worth.</div>
+    ${lineChart([{name:"Net worth", color:"var(--acc)", values: pts.map(e => e.value)}], lbl, 140, v => shortMoney(v))}
+    <div class="row" style="padding:6px 0 0;border:0"><button class="ghost" data-nwpage="${page+1}" ${page>=pages-1?'disabled':''}>◀ Earlier</button><span class="lab">${lbl[0]||""} – ${lbl[lbl.length-1]||""}</span><button class="ghost" data-nwpage="${page-1}" ${page<=0?'disabled':''}>Later ▶</button></div>`;
 }
 function overview(){
   const inv = sum("investment"), cost = sum("investment", i => i.extra||0), debt = sum("liability");
@@ -81,6 +85,8 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-bankhd]")) { bankOpen = !bankOpen; localStorage.setItem("ledger-bankopen", bankOpen ? "1" : "0"); render(); }
   if (e.target.closest("[data-statshd]")) { statsOpen = !statsOpen; localStorage.setItem("ledger-statsopen", statsOpen ? "1" : "0"); render(); }
   if (e.target.closest("[data-nwcard]")) { nwOpen = !nwOpen; render(); }
+  const nwp = e.target.closest("[data-nwpage]");
+  if (nwp) { nwPage = +nwp.dataset.nwpage; render(); }
   const em = e.target.closest("[data-em]"), hd = e.target.closest("[data-hold]"), ic = e.target.closest("[data-invcat]");
   if (em) { expMonth = em.dataset.em; render(); }
   if (hd) { holdOpen = !holdOpen; render(); }
