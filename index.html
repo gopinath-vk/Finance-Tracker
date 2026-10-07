@@ -10,12 +10,14 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<div id="backdrop"></div>
+<nav id="drawer"><div class="lab" style="padding:10px 14px 4px">My Ledger</div><div id="nav"></div></nav>
 <main>
 <header>
+  <button class="ghost" id="menu" aria-label="Menu">☰</button>
   <h1>My Ledger</h1>
   <div><span id="st"></span> <button class="ghost" id="hide" aria-label="Hide amounts">👁</button> <button class="ghost" id="sync">Connect Google Drive</button></div>
 </header>
-<nav id="nav"></nav>
 <div id="view"></div>
 <div class="card">
   <span class="lab">Currency symbol</span> <input id="cur" style="width:70px">
@@ -37,6 +39,7 @@
 <script src="js/tabs/investments.js"></script>
 <script src="js/tabs/liabilities.js"></script>
 <script src="js/tabs/transfers.js"></script>
+<script src="js/tabs/allocation.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
