@@ -8,6 +8,14 @@
 <meta name="theme-color" content="#14213d">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="css/style.css">
+<style>
+/* Inlined so the slide-out menu still works even if css/style.css is briefly out of date on your site. */
+#backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:19}
+#backdrop.open{display:block}
+#drawer{position:fixed;top:0;left:0;bottom:0;width:230px;max-width:80vw;background:#fff;border-right:1px solid #dde2e8;
+  transform:translateX(-100%);transition:transform .2s;z-index:20;overflow-y:auto}
+#drawer.open{transform:translateX(0)}
+</style>
 </head>
 <body>
 <div id="backdrop"></div>
