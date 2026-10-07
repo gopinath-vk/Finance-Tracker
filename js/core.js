@@ -21,15 +21,16 @@ const DEFAULT_CAT_MAP = {
   "income tax":"Tax","panchayat tax":"Tax",
   "bike service":"Transportation","petrol":"Transportation","travel":"Transportation"
 };
-// Seeded once from the bank-total-by-month figures in the person's own spreadsheet (2025/2026 Bal Sheet summary
-// tabs). This is bank balance only, not full net worth — investment and liability values weren't tracked month
-// by month in the sheet. From the month the app started tracking, entries are the real net worth instead
-// (investments + banks - liabilities), kept up to date automatically — see updateNetWorthHistory() in dashboard.js.
+// Seeded once from the real monthly net worth in the person's own Portfolio workbook (Snapshot sheet: every
+// asset and loan balance, logged month by month). From the month the app started tracking, entries are kept
+// up to date automatically instead — see updateNetWorthHistory() in dashboard.js.
 const SEED_NET_WORTH = [
-  ["2025-01",90574.2],["2025-02",73436.9],["2025-03",205129.2],["2025-04",50674.3],["2025-05",204779.8],["2025-06",186842.2],
-  ["2025-07",236342.9],["2025-08",242243.5],["2025-09",382441.8],["2025-10",399342.5],["2025-11",234944.8],["2025-12",244910.2],
-  ["2026-01",256178.9],["2026-02",198140.1],["2026-03",230992.2],["2026-04",251155.1],["2026-05",-80282.0],["2026-06",30461.8],
-  ["2026-07",211956.7],["2026-08",186475.0],["2026-09",105964.3]
+  ["2025-01",-539425.81],["2025-02",-516002.05],["2025-03",-368454.78],["2025-04",-501935.74],
+  ["2025-05",-401220.15],["2025-06",-409157.81],["2025-07",-349657.12],["2025-08",-333756.49],
+  ["2025-09",-398558.24],["2025-10",-371657.50],["2025-11",-323055.21],["2025-12",-303089.79],
+  ["2026-01",-256321.10],["2026-02",-291947.90],["2026-03",-230775.81],["2026-04",-193862.88],
+  ["2026-05",-503458.79],["2026-06",-542714.94],["2026-07",-340705.30],["2026-08",-347510.16],
+  ["2026-09",-529735.67],["2026-10",-457062.87]
 ].map(([date,value]) => ({date, value}));
 let db = load();
 

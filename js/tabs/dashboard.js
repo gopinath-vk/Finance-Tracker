@@ -22,8 +22,7 @@ function netWorthChart(){
   const start = Math.max(0, all.length - PAGE * (page + 1)), end = all.length - PAGE * page;
   const pts = all.slice(start, end);
   const lbl = pts.map(e => new Date(e.date+"-15").toLocaleDateString(undefined,{month:"short",year:"2-digit"}));
-  return `<div class="lab" style="margin-top:8px">Before ${month()}, this reflects bank balances only from your spreadsheet (investments/liabilities weren't tracked monthly there). From this month on, it's your real net worth.</div>
-    ${lineChart([{name:"Net worth", color:"var(--acc)", values: pts.map(e => e.value)}], lbl, 140, v => shortMoney(v))}
+  return `${lineChart([{name:"Net worth", color:"var(--acc)", values: pts.map(e => e.value)}], lbl, 140, v => shortMoney(v))}
     <div class="row" style="padding:6px 0 0;border:0"><button class="ghost" data-nwpage="${page+1}" ${page>=pages-1?'disabled':''}>◀ Earlier</button><span class="lab">${lbl[0]||""} – ${lbl[lbl.length-1]||""}</span><button class="ghost" data-nwpage="${page-1}" ${page<=0?'disabled':''}>Later ▶</button></div>`;
 }
 function overview(){
