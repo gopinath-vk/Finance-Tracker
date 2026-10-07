@@ -57,10 +57,17 @@ function invList(allItems){
 
   const posRows = positions(shownItems).map(p => {
     const g = p.gainPct, x = p.xirrPct, open = openPos === p.name;
-    const lotRows = p.lots.map(l => `<div class="row"><div>${l.date||"—"}<div class="lab">${l.units?l.units+" units":""}${l.units&&l.extra?" @ "+money(l.extra/l.units):""}${l.platform?" · "+esc(l.platform):""}</div></div><div><b>${money(l.amount)}</b> <span class="lab">inv ${money(l.extra||0)}</span> ${acts(l)}</div></div>`).join("");
+    // Latest entry first, grouped under a year header with that year's invested subtotal.
+    const byYear = {};
+    [...p.lots].reverse().forEach(l => { const y = l.date ? l.date.slice(0,4) : "No date"; (byYear[y] = byYear[y] || []).push(l); });
+    const lotRows = Object.entries(byYear).sort((a,b) => a[0]==="No date" ? 1 : b[0]==="No date" ? -1 : b[0].localeCompare(a[0])).map(([y, lots]) => {
+      const yrInvested = lots.reduce((s,l) => s+(l.extra||0), 0);
+      const rows = lots.map(l => `<div class="row"><div>${l.date||"—"}<div class="lab">${l.units?l.units+" units":""}${l.units&&l.extra?" @ "+money(l.extra/l.units):""}${l.platform?" · "+esc(l.platform):""}</div></div><div><b>${money(l.amount)}</b> <span class="lab">inv ${money(l.extra||0)}</span> ${acts(l)}</div></div>`).join("");
+      return `<div class="lab" style="margin-top:8px">${esc(y)} · invested ${money(yrInvested)}</div>${rows}`;
+    }).join("");
     return `<div class="card" style="margin-bottom:10px">
       <button class="hd" data-pos="${esc(p.name)}" aria-expanded="${open}">
-        <span><b>${esc(p.name)}</b><div class="lab">${esc(p.cat)}${p.platform?" · "+esc(p.platform):""}${p.units?" · "+p.units+" units":""}${p.price?" · "+money(p.price)+(p.kind?"/"+(p.kind==="gold"?"g":"unit"):""):""}</div></span>
+        <span><b>${esc(p.name)}</b><div class="lab">${esc(p.cat)}${p.platform?" · "+esc(p.platform):""}${p.units?" · "+p.units+" units":""}${p.price?" · "+money(p.price)+(p.kind?"/"+(p.kind==="gold"?"g":"unit"):""):""}</div>${p.lots[p.lots.length-1].date?`<div class="lab">Last added ${p.lots[p.lots.length-1].date}</div>`:""}</span>
         <span style="text-align:right"><b>${money(p.value)}</b><div class="lab ${g!==null&&g<0?'neg':'pos'}">${g!==null ? g.toFixed(1)+"%" : ""}${x!==null ? " · XIRR "+x.toFixed(1)+"%" : ""}</div></span>
       </button>
       ${open ? `<div class="lab" style="margin-top:8px">Invested ${money(p.invested)} · Current ${money(p.value)} · P&L ${g!==null?money(p.value-p.invested)+" ("+g.toFixed(1)+"%)":"—"}${x!==null?" · XIRR "+x.toFixed(1)+"%":""}</div><div style="margin-top:8px">${lotRows}</div>` : ""}
