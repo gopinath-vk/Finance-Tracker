@@ -2,14 +2,15 @@
 // item-name -> category auto-suggestions (db.catMap) — collapsed by default, expand to add/edit/delete.
 let mapOpen = false, mapEdit = null;
 
+// Shows the whole year's spending by category, regardless of which month is selected in the filter above.
 function expenseChart(){
   const items = db.items.filter(i => i.type==="expense" && i.cat!=="TR/WD" && i.cat!=="CC Bill" &&
-    (fy==="all" || i.date.startsWith(fy)) && (fm==="all" || i.date.slice(5,7)===fm));
+    (fy==="all" || i.date.startsWith(fy)));
   const cats = {}; items.forEach(i => cats[i.cat] = (cats[i.cat]||0) + i.amount);
   const entries = Object.entries(cats).sort((a,b) => b[1]-a[1]);
   if (!entries.length) return "";
   const top = Math.max(1, ...entries.map(e => e[1]));
-  return `<div class="card"><div class="lab">Spending by category${fy!=="all" ? " · "+fy+(fm!=="all"?"-"+fm:"") : ""}</div>${entries.map(([c,v]) =>
+  return `<div class="card"><div class="lab">Spending by category · ${fy==="all" ? "all years" : fy}</div>${entries.map(([c,v]) =>
     `<div style="margin-top:8px"><div class="row" style="padding:0;border:0"><span>${esc(c)}</span><b>${money(v)}</b></div><div class="bar" style="width:${v/top*100}%"></div></div>`).join("")}</div>`;
 }
 
