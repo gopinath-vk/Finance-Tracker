@@ -1,9 +1,10 @@
 // Investments tab: stocks/ETFs (live via NSE), mutual funds (live NAV), gold (live spot, best-effort),
-// and manual-value assets — grouped into asset classes, with each purchase logged as its own dated lot
-// so invested-over-time, XIRR and profit/loss can be worked out per holding.
-const INV_CATS = ["Mutual Funds","Stocks","ETFs","Gold","Real Estate","Other"];
-const CAT_KIND = {"Mutual Funds":"mf","Stocks":"stock","ETFs":"stock","Gold":"gold","Real Estate":"other","Other":"other"};
-let invHoldCat = "all", pickedCat = null, openPos = null;
+// US stocks/ETFs — e.g. a Smallcase US basket, or direct overseas holdings — (live via Yahoo, converted
+// to INR at the current rate), and manual-value assets. Grouped into asset classes, with each purchase
+// logged as its own dated lot so invested-over-time, XIRR and profit/loss can be worked out per holding.
+const INV_CATS = ["Mutual Funds","Stocks","ETFs","Overseas","Gold","Real Estate","Other"];
+const CAT_KIND = {"Mutual Funds":"mf","Stocks":"stock","ETFs":"stock","Overseas":"us","Gold":"gold","Real Estate":"other","Other":"other"};
+let invHoldCat = "all", pickedCat = null, openPos = null, openYears = new Set();
 
 // Newton's method XIRR: flows = [{date:Date, amount}], outflows negative, inflows positive. Returns a decimal rate, or null.
 function xirr(flows){
@@ -40,8 +41,6 @@ function positions(items){
   }).sort((a,b) => b.value - a.value);
 }
 
-
-
 function invList(allItems){
   const ed = editId && allItems.find(i => i.id === editId);
   const k = ed ? (ed.kind || "other") : (pickedCat ? CAT_KIND[pickedCat] : "stock");
@@ -57,20 +56,21 @@ function invList(allItems){
 
   const posRows = positions(shownItems).map(p => {
     const g = p.gainPct, x = p.xirrPct, open = openPos === p.name;
-    // Latest entry first, grouped under a year header with that year's invested subtotal.
+    // Latest year first; each year collapsed to its invested subtotal until tapped.
     const byYear = {};
     [...p.lots].reverse().forEach(l => { const y = l.date ? l.date.slice(0,4) : "No date"; (byYear[y] = byYear[y] || []).push(l); });
     const lotRows = Object.entries(byYear).sort((a,b) => a[0]==="No date" ? 1 : b[0]==="No date" ? -1 : b[0].localeCompare(a[0])).map(([y, lots]) => {
+      const yrKey = p.name + "|" + y, yrOpen = openYears.has(yrKey);
       const yrInvested = lots.reduce((s,l) => s+(l.extra||0), 0);
       const rows = lots.map(l => `<div class="row"><div>${l.date||"—"}<div class="lab">${l.units?l.units+" units":""}${l.units&&l.extra?" @ "+money(l.extra/l.units):""}${l.platform?" · "+esc(l.platform):""}</div></div><div><b>${money(l.amount)}</b> <span class="lab">inv ${money(l.extra||0)}</span> ${acts(l)}</div></div>`).join("");
-      return `<div class="lab" style="margin-top:8px">${esc(y)} · invested ${money(yrInvested)}</div>${rows}`;
+      return `<button class="hd" data-yr="${esc(yrKey)}" style="margin-top:8px"><span class="lab">${esc(y)} · invested ${money(yrInvested)} · ${lots.length} ${lots.length===1?"entry":"entries"}</span><span class="lab">${yrOpen?"Hide ▲":"Show ▼"}</span></button>${yrOpen ? rows : ""}`;
     }).join("");
     return `<div class="card" style="margin-bottom:10px">
       <button class="hd" data-pos="${esc(p.name)}" aria-expanded="${open}">
         <span><b>${esc(p.name)}</b><div class="lab">${esc(p.cat)}${p.platform?" · "+esc(p.platform):""}${p.units?" · "+p.units+" units":""}${p.price?" · "+money(p.price)+(p.kind?"/"+(p.kind==="gold"?"g":"unit"):""):""}</div>${p.lots[p.lots.length-1].date?`<div class="lab">Last added ${p.lots[p.lots.length-1].date}</div>`:""}</span>
         <span style="text-align:right"><b>${money(p.value)}</b><div class="lab ${g!==null&&g<0?'neg':'pos'}">${g!==null ? g.toFixed(1)+"%" : ""}${x!==null ? " · XIRR "+x.toFixed(1)+"%" : ""}</div></span>
       </button>
-      ${open ? `<div class="lab" style="margin-top:8px">Invested ${money(p.invested)} · Current ${money(p.value)} · P&L ${g!==null?money(p.value-p.invested)+" ("+g.toFixed(1)+"%)":"—"}${x!==null?" · XIRR "+x.toFixed(1)+"%":""}</div><div style="margin-top:8px">${lotRows}</div>` : ""}
+      ${open ? `<div class="lab" style="margin-top:8px">Invested ${money(p.invested)} · Current ${money(p.value)} · P&L ${g!==null?money(p.value-p.invested)+" ("+g.toFixed(1)+"%)":"—"}${x!==null?" · XIRR "+x.toFixed(1)+"%":""}</div><div style="margin-top:4px">${lotRows}</div>` : ""}
     </div>`;
   }).join("");
 
@@ -78,19 +78,20 @@ function invList(allItems){
     <div class="chips" style="grid-column:1/-1">${INV_CATS.map(c => `<button type="button" class="${cat===c?"on":""}" data-invcatpick="${c}">${c}</button>`).join("")}</div>
     <input name="cat" type="hidden" value="${esc(cat)}">
     ${cat==="Other" ? `<input name="catother" placeholder="Category name" value="${esc(customCat)}">` : ""}
-    <select name="kind">${o("stock","Live price: Stock / ETF (NSE)")}${o("mf","Live price: Mutual fund")}${o("gold","Live price: Gold (per gram)")}${o("other","Manual value")}</select>
+    <select name="kind">${o("stock","Live price: Stock / ETF (NSE)")}${o("us","Live price: US stock/ETF ($→₹)")}${o("mf","Live price: Mutual fund")}${o("gold","Live price: Gold (per gram)")}${o("other","Manual value")}</select>
     <input class="mf" id="mfq" placeholder="Search fund name" autocomplete="off">
     <select class="mf" id="mfr"><option value="">Pick a fund</option></select>
     <input name="name" placeholder="Name" value="${ed ? esc(ed.name) : ""}" required>
-    <input class="sy" name="sym" placeholder="NSE symbol (TCS) or fund code" value="${ed ? esc(ed.sym||"") : ""}">
+    <input class="sy" name="sym" placeholder="${k==='us'?'US ticker (AAPL)':'NSE symbol (TCS) or fund code'}" value="${ed ? esc(ed.sym||"") : ""}">
     <input class="un" name="units" type="number" step="any" placeholder="${k==='gold'?'Grams purchased':'Units / shares'}" value="${ed ? val(ed.units) : ""}">
+    <select class="cur" name="curr"><option value="inr">₹ rupees</option><option value="usd">$ dollars (auto-converts)</option></select>
     <input class="pu" name="navprice" type="number" step="any" placeholder="${k==='mf'?'NAV at purchase':'Buy price per unit'} (optional)">
     <input class="mo" name="amount" type="number" step="any" placeholder="Current value" value="${ed && !ed.sym ? ed.amount : ""}">
     <input class="pu-alt" name="extra" type="number" step="any" placeholder="Or: amount invested this entry" value="${ed ? val(ed.extra) : ""}">
-    <input name="platform" list="plats" placeholder="Platform (Zerodha, Groww...)" value="${ed ? esc(ed.platform||"") : ""}"><datalist id="plats">${platforms.map(x => `<option value="${esc(x)}">`).join("")}</datalist>
+    <input name="platform" list="plats" placeholder="Platform (Zerodha, Groww, Smallcase...)" value="${ed ? esc(ed.platform||"") : ""}"><datalist id="plats">${platforms.map(x => `<option value="${esc(x)}">`).join("")}</datalist>
     <input name="date" type="date" value="${ed ? (ed.date||"") : new Date().toLocaleDateString("sv")}">
     <button>${ed ? "Save changes" : "Add investment"}</button>${ed ? '<button type="button" class="ghost" data-cancel="1">Cancel</button>' : ""}</form>
-  <div class="lab" style="margin:4px 0 8px">Add a new entry each time you invest (e.g. monthly SIP) — each one is a dated purchase, grouped below by holding. Enter the NAV/price and units, or just the amount invested — whichever you have.</div>
+  <div class="lab" style="margin:4px 0 8px">Add a new entry each time you invest (e.g. monthly SIP) — each one is a dated purchase, grouped below by holding. Enter the NAV/price and units, or just the amount invested — whichever you have. Dollar amounts convert to ₹ using the rate from your last price refresh${db.fxRateAt ? " ("+money(db.fxRate)+"/$ as of "+new Date(db.fxRateAt).toLocaleDateString(undefined,{day:"numeric",month:"short"})+")" : " (not fetched yet — refresh prices once first for an accurate rate)"}.</div>
   ${chips}
   <div style="margin-top:8px"><button class="ghost" id="rp">Refresh prices</button> <span class="lab" id="pst"></span></div>
   <div style="margin-top:10px">${posRows || '<div class="empty">No investments in this category.</div>'}</div>`;
@@ -100,19 +101,24 @@ function invList(allItems){
 function beforeSaveInvestment(it, d, old) {
   it.cat = it.cat === "Other" ? (d.catother || "Other").trim() : it.cat;
   it.platform = (d.platform || "").trim();
-  if (d.kind === "other") { it.kind = undefined; it.sym = undefined; it.units = undefined; return; }
-  const nav = +d.navprice || 0;
+  const fx = (d.curr === "usd") ? (db.fxRate || FX_FALLBACK) : 1;
+  if (d.kind === "other") {
+    it.kind = undefined; it.sym = undefined; it.units = undefined;
+    if (d.curr === "usd") { it.amount = +(it.amount * fx).toFixed(2); it.extra = +(it.extra * fx).toFixed(2); }
+    return;
+  }
+  const nav = (+d.navprice || 0) * fx;
   if (d.kind === "gold") {
     it.kind = "gold"; it.sym = "GOLD"; it.units = +d.units || 0;
     if (!it.units) { alert("Enter the grams purchased."); return false; }
-    if (nav) it.extra = +(nav * it.units).toFixed(2);
+    if (nav) it.extra = +(nav * it.units).toFixed(2); else if (d.curr === "usd") it.extra = +(it.extra * fx).toFixed(2);
     if (old && old.kind === "gold" && old.price) { it.price = old.price; it.priceAt = old.priceAt; it.amount = +(old.price * it.units).toFixed(2); } else it.amount = 0;
     return;
   }
   it.kind = d.kind; it.sym = (d.sym||"").trim(); it.units = +d.units || 0;
   if (!it.sym || !it.units) { alert("Enter the symbol or fund code, and the units."); return false; }
-  if (nav) it.extra = +(nav * it.units).toFixed(2);
-  if (old && old.sym === it.sym && old.price) { it.price = old.price; it.priceAt = old.priceAt; it.amount = +(old.price * it.units).toFixed(2); } else it.amount = 0;
+  if (nav) it.extra = +(nav * it.units).toFixed(2); else if (d.curr === "usd") it.extra = +(it.extra * fx).toFixed(2);
+  if (old && old.sym === it.sym && old.kind === it.kind && old.price) { it.price = old.price; it.priceAt = old.priceAt; it.amount = +(old.price * it.units).toFixed(2); } else it.amount = 0;
 }
 registerTab("investment", "Investments", () => invList(db.items.filter(i => i.type === "investment")), {beforeSave: beforeSaveInvestment});
 
@@ -124,6 +130,8 @@ document.addEventListener("click", e => {
   if (hc) { invHoldCat = hc.dataset.invholdcat; render(); }
   const pos = e.target.closest("[data-pos]");
   if (pos) { openPos = openPos === pos.dataset.pos ? null : pos.dataset.pos; render(); }
+  const yr = e.target.closest("[data-yr]");
+  if (yr) { openYears.has(yr.dataset.yr) ? openYears.delete(yr.dataset.yr) : openYears.add(yr.dataset.yr); render(); }
 });
 document.addEventListener("change", e => {
   if (e.target.name === "kind") e.target.form.dataset.k = e.target.value;

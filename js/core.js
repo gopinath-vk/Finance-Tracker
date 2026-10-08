@@ -107,6 +107,7 @@ document.addEventListener("submit", e => {
   const old = editId && db.items.find(i => i.id === editId);
   const it = {id: old ? old.id : crypto.randomUUID(), type: f.dataset.t, name: d.name, cat: d.cat || d.kind, amount: +d.amount || 0, extra: +d.extra || 0, date: d.date || ""};
   if (d.source !== undefined) it.source = d.source.trim();
+  if (d.note !== undefined) it.note = d.note.trim();
   const hook = TABS[it.type] && TABS[it.type].beforeSave;
   if (hook && hook(it, d, old) === false) return;
   db.items = old ? db.items.map(i => i.id === old.id ? it : i) : [...db.items, it];
