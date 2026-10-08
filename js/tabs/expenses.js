@@ -62,6 +62,8 @@ function budgetCard(cats){
     || `<div class="empty">No budgets set for ${MN[+mo-1]} ${yr} yet.</div>`;
   const total = Object.values(monthBudget).reduce((a,b) => a+b, 0);
   const yrTotal = Object.values(yearBudgetTotals(yr)).reduce((a,b) => a+b, 0);
+  const nextYm = mo==="12" ? (+yr+1)+"-01" : yr+"-"+String(+mo+1).padStart(2,"0");
+  const [nyr, nmo] = nextYm.split("-");
   return `<div class="card"><button class="hd" data-budgethd="1" aria-expanded="${budgetOpen}"><span class="lab">Budgets</span><span class="lab">${budgetOpen?"Hide ▲":"Show ▼"}</span></button>
   ${budgetOpen ? `<div class="mt" style="margin-top:8px"><select id="byear">${years.map(y => `<option ${y===yr?"selected":""}>${y}</option>`).join("")}</select>
     <select id="bmonth">${MN.map((n,k) => { const v = String(k+1).padStart(2,"0"); return `<option value="${v}" ${v===mo?"selected":""}>${n}</option>`; }).join("")}</select></div>
@@ -74,7 +76,17 @@ function budgetCard(cats){
     <button>${ed ? "Save budget" : "Set budget"}</button>${ed ? '<button type="button" class="ghost" data-budgetcancel="1">Cancel</button>' : ""}</form>
   <div class="row" style="padding:0;border:0"><span class="lab">${MN[+mo-1]} ${esc(yr)} total</span><b>${money(total)}</b></div>
   ${rows}
-  <div class="lab" style="margin-top:10px">${esc(yr)} total so far (sum of months set): ${money(yrTotal)}</div>` : ""}</div>`;
+  <div class="lab" style="margin-top:10px">${esc(yr)} total so far (sum of months set): ${money(yrTotal)}</div>
+  ${Object.keys(monthBudget).length ? `<button class="ghost" style="margin-top:10px" data-copynext="${nextYm}">Copy to ${MN[+nmo-1]} ${nyr} →</button>` : ""}
+  <div class="lab" style="margin:12px 0 4px">Or copy any month's budget to any other month</div>
+  <form class="card" id="copyf">
+    <select name="fromyear">${years.map(y => `<option ${y===yr?"selected":""}>${y}</option>`).join("")}</select>
+    <select name="frommonth">${MN.map((n,k) => { const v = String(k+1).padStart(2,"0"); return `<option value="${v}" ${v===mo?"selected":""}>${n}</option>`; }).join("")}</select>
+    <span class="lab" style="align-self:center">→</span>
+    <select name="toyear">${[...years, String(+years[0]+1)].map(y => `<option ${y===yr?"selected":""}>${y}</option>`).join("")}</select>
+    <select name="tomonth">${MN.map((n,k) => { const v = String(k+1).padStart(2,"0"); return `<option value="${v}">${n}</option>`; }).join("")}</select>
+    <button>Copy budgets</button>
+  </form>` : ""}</div>`;
 }
 
 registerTab("expense", "Expenses", () => {
@@ -94,6 +106,7 @@ document.addEventListener("click", e => {
   if (e.target.dataset.budgetdel && confirm("Delete this budget?")) {
     if (db.budgets[budgetYM]) { delete db.budgets[budgetYM][e.target.dataset.budgetdel]; save(); }
   }
+  if (e.target.dataset.copynext) { copyBudget(budgetYM, e.target.dataset.copynext); }
 });
 document.addEventListener("change", e => {
   if (e.target.id === "byear" || e.target.id === "bmonth") {
@@ -102,7 +115,22 @@ document.addEventListener("change", e => {
     budgetYM = y + "-" + m; budgetEdit = null; render();
   }
 });
+// Copies one month's budget onto another, overwriting any categories the two months share; categories only
+// set on the target month are left alone. Confirms first if the target already has something set.
+function copyBudget(fromYm, toYm){
+  const from = db.budgets[fromYm];
+  if (!from || !Object.keys(from).length) return;
+  const to = db.budgets[toYm] || {};
+  if (Object.keys(to).length && !confirm(`${toYm} already has budgets set. Overwrite the matching categories with ${fromYm}'s?`)) return;
+  db.budgets[toYm] = {...to, ...from};
+  budgetYM = toYm; budgetEdit = null; save();
+}
 document.addEventListener("submit", e => {
+  if (e.target.id === "copyf") {
+    e.preventDefault();
+    const d = Object.fromEntries(new FormData(e.target));
+    copyBudget(d.fromyear+"-"+d.frommonth, d.toyear+"-"+d.tomonth);
+  }
   if (e.target.id === "catmapf") {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.target));
