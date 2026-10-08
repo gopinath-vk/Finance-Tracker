@@ -1,12 +1,34 @@
 // Dashboard tab: net worth, bank balances, monthly stats, charts, holdings.
-let expMonth = null, holdOpen = false, holdCat = "all", nwOpen = false, nwPage = 0;
+let expMonth = null, holdOpen = false, nwOpen = false, nwPage = 0, trendOpen = localStorage.getItem("ledger-trendopen") !== "0", spentOpen = localStorage.getItem("ledger-spentopen") !== "0";
 let bankOpen = localStorage.getItem("ledger-bankopen") !== "0", statsOpen = localStorage.getItem("ledger-statsopen") !== "0";
 
-function balances(){
+function balances(){ return balancesAsOf(null); }
+// Reconstructs bank balances as they stood at the end of a given YYYY-MM (or now, if cutoff is null).
+function balancesAsOf(cutoff){
   const b = db.banks || {date: "2026-01-01", bal: {}}, out = {...b.bal};
-  db.items.forEach(i => { if (!i.source || (i.date||"") < b.date) return; if (!(i.source in out)) out[i.source] = 0;
+  const end = cutoff ? cutoff + "-32" : null; // "-32" sorts after any real day in that month
+  db.items.forEach(i => { if (!i.source || (i.date||"") < b.date) return; if (end && i.date > end) return;
+    if (!(i.source in out)) out[i.source] = 0;
     out[i.source] += i.type === "expense" ? -i.amount : i.type === "income" ? i.amount : 0; });
   return out;
+}
+// Last 3 months' invested-to-date for Mutual Fund/Stocks/Overseas/FD holdings, and cash balance — a compact
+// table instead of the full holdings list. Investment "value" shown is cumulative amount invested by that
+// month's end (not a backfilled market value, since historical prices aren't tracked).
+function monthlyInvestTable(){
+  const months = [2,1,0].map(k => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()-k); return d.toLocaleDateString("sv").slice(0,7); });
+  const CATMAP = {"Mutual Funds":"Mutual Fund", "Stocks":"Stocks", "Indian Stocks":"Stocks", "Overseas":"Overseas", "FD":"FD"};
+  const inv = db.items.filter(i => i.type==="investment" && CATMAP[i.cat]);
+  const byName = {}; inv.forEach(i => (byName[i.name] = byName[i.name] || {cat: CATMAP[i.cat], lots: []}).lots.push(i));
+  const rows = Object.entries(byName).map(([name, g]) => ({name, cat: g.cat,
+    vals: months.map(mm => g.lots.filter(l => l.date && l.date <= mm+"-31").reduce((s,l) => s+(l.extra||0), 0))}));
+  rows.sort((a,b) => a.cat.localeCompare(b.cat) || b.vals[2]-a.vals[2]);
+  const cashVals = months.map(mm => Object.values(balancesAsOf(mm)).reduce((a,b) => a+b, 0));
+  const hdr = months.map(mm => new Date(mm+"-15").toLocaleDateString(undefined,{month:"short"})).join("</th><th>");
+  const tr = (cat, name, vals) => `<tr><td>${esc(cat)}</td><td>${esc(name)}</td>${vals.map(v => `<td style="text-align:right">${money(v)}</td>`).join("")}</tr>`;
+  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.9rem"><tr style="color:var(--mute)"><th style="text-align:left">Category</th><th style="text-align:left">Item</th><th>${hdr}</th></tr>
+  ${rows.map(r => tr(r.cat, r.name, r.vals)).join("")}
+  ${tr("Cash", "All banks + cash", cashVals)}</table></div>`;
 }
 // Keeps db.netWorth up to date for the current month (see SEED_NET_WORTH in core.js for what the older entries mean).
 function updateNetWorthHistory(nw){
@@ -43,18 +65,11 @@ function overview(){
   const ms = [...Array(6)].map((_,k) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()-5+k); return d.toLocaleDateString("sv").slice(0,7); });
   const tot = (t,mm) => db.items.filter(i => i.type===t && real(i) && i.date && i.date.startsWith(mm)).reduce((s,i) => s+i.amount, 0);
   const mlbl = ms.map(x => new Date(x+"-15").toLocaleDateString(undefined,{month:"short"}));
-  const trend = `<div class="card"><div class="lab">Last 6 months: income (green) and expenses (red)</div>${lineChart([
+  const trend = `<div class="card"><button class="hd" data-trendhd="1" aria-expanded="${trendOpen}"><span class="lab">Last 6 months: income (green) and expenses (red)</span><span class="lab">${trendOpen?"Hide ▲":"Show ▼"}</span></button>${trendOpen ? lineChart([
     {name:"Income", color:"var(--pos)", values: ms.map(x => tot("income",x))},
     {name:"Expenses", color:"var(--neg)", values: ms.map(x => tot("expense",x))}
-  ], mlbl, 130, v => shortMoney(v))}</div>`;
-  const upd = Math.max(0, ...db.items.map(i => i.priceAt||0));
-  const allInv = db.items.filter(i => i.type==="investment");
-  const invCats = [...new Set(allInv.map(i => i.cat || "Other"))];
-  const byCat = {}; allInv.forEach(i => byCat[i.cat||"Other"] = (byCat[i.cat||"Other"]||0) + i.amount);
-  const shown = holdCat==="all" ? allInv : allInv.filter(i => (i.cat||"Other")===holdCat);
-  const hold = shown.sort((a,b) => b.amount-a.amount).map(i => { const g = i.amount-(i.extra||0); return `<div class="row"><span>${esc(i.name)}</span><span><b>${money(i.amount)}</b> <span class="${g<0?'neg':'pos'}">${i.extra ? (g/i.extra*100).toFixed(1)+"%" : ""}</span></span></div>`; }).join("");
-  const chips = `<div class="chips"><button class="${holdCat==="all"?"on":""}" data-invcat="all">All</button>${invCats.map(c => `<button class="${holdCat===c?"on":""}" data-invcat="${esc(c)}">${esc(c)} · ${money(byCat[c])}</button>`).join("")}</div>`;
-  const holdCard = `<div class="card"><button class="hd" data-hold="1" aria-expanded="${holdOpen}"><span><span class="lab">Investments</span> <b>${money(sum("investment"))}</b></span><span class="lab">${holdOpen ? "Hide ▲" : "Show ▼"}</span></button>${holdOpen ? `<div class="lab" style="margin:8px 0">${upd ? "Prices updated " + new Date(upd).toLocaleString([], {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : ""}</div>${chips}${hold || '<div class="empty">No investments in this category.</div>'}<button class="ghost" id="rp">Refresh prices</button> <span class="lab" id="pst"></span>` : ""}</div>`;
+  ], mlbl, 130, v => shortMoney(v)) : ""}</div>`;
+  const holdCard = `<div class="card"><button class="hd" data-hold="1" aria-expanded="${holdOpen}"><span><span class="lab">Investments</span> <b>${money(sum("investment"))}</b></span><span class="lab">${holdOpen ? "Hide ▲" : "Show ▼"}</span></button>${holdOpen ? `<div class="lab" style="margin:8px 0">Amount invested by month-end, last 3 months</div>${monthlyInvestTable()}` : ""}</div>`;
   return `<div class="card"><button class="hd" data-nwcard="1" aria-expanded="${nwOpen}"><span class="lab">Net worth (investments + bank balances - liabilities)</span><span class="lab">${nwOpen?"Hide chart ▲":"Show trend ▼"}</span></button>
     <div class="big ${nw<0?'neg':''}">${money(nw)}</div>${nwOpen ? netWorthChart() : ""}</div>
   ${bankCards}<button class="hd" data-statshd="1" aria-expanded="${statsOpen}" style="margin:4px 0 8px"><span class="lab">This month's summary</span><span class="lab">${statsOpen?"Hide ▲":"Show ▼"}</span></button>
@@ -66,12 +81,12 @@ function overview(){
     <div class="card"><div class="lab">Total invested value</div><b>${money(inv)}</b></div>
     <div class="card"><div class="lab">Total liabilities</div><b class="neg">${money(debt)}</b></div>
   </div>` : '<div style="margin-bottom:14px"></div>'}
-  ${trend}${holdCard}<div class="card"><div class="lab">Where the money went</div>
-  <div class="mt">${m3.map(x => `<button class="${x===sel?"":"ghost"}" data-em="${x}">${new Date(x+"-15").toLocaleDateString(undefined,{month:"short",year:"2-digit"})}</button>`).join("")}</div>
+  ${trend}${holdCard}<div class="card"><button class="hd" data-spenthd="1" aria-expanded="${spentOpen}"><span class="lab">Where the money went</span><span class="lab">${spentOpen?"Hide ▲":"Show ▼"}</span></button>
+  ${spentOpen ? `<div class="mt">${m3.map(x => `<button class="${x===sel?"":"ghost"}" data-em="${x}">${new Date(x+"-15").toLocaleDateString(undefined,{month:"short",year:"2-digit"})}</button>`).join("")}</div>
   <div class="row" style="padding:0 0 4px;border:0"><span class="lab">Total spent</span><b class="neg">${money(Object.values(cats).reduce((a,b)=>a+b,0))}</b></div>
   ${Object.keys(cats).length ? Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([c,v]) =>
     `<div style="margin-top:8px"><div class="row" style="padding:0;border:0"><span>${esc(c)}</span><b>${money(v)}</b></div><div class="bar" style="width:${v/top*100}%"></div></div>`).join("")
-    : '<div class="empty">No expenses logged for this month.</div>'}</div>`;
+    : '<div class="empty">No expenses logged for this month.</div>'}` : ""}</div>`;
 }
 
 
@@ -86,8 +101,9 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-nwcard]")) { nwOpen = !nwOpen; render(); }
   const nwp = e.target.closest("[data-nwpage]");
   if (nwp) { nwPage = +nwp.dataset.nwpage; render(); }
-  const em = e.target.closest("[data-em]"), hd = e.target.closest("[data-hold]"), ic = e.target.closest("[data-invcat]");
+  const em = e.target.closest("[data-em]"), hd = e.target.closest("[data-hold]");
   if (em) { expMonth = em.dataset.em; render(); }
   if (hd) { holdOpen = !holdOpen; render(); }
-  if (ic) { holdCat = ic.dataset.invcat; render(); }
+  if (e.target.closest("[data-trendhd]")) { trendOpen = !trendOpen; localStorage.setItem("ledger-trendopen", trendOpen ? "1" : "0"); render(); }
+  if (e.target.closest("[data-spenthd]")) { spentOpen = !spentOpen; localStorage.setItem("ledger-spentopen", spentOpen ? "1" : "0"); render(); }
 });
