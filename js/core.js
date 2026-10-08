@@ -43,6 +43,7 @@ function migrate(d) {
   if (!d.catMap) d.catMap = {...DEFAULT_CAT_MAP};
   if (!d.netWorth || !d.netWorth.length) d.netWorth = SEED_NET_WORTH.map(e => ({...e}));
   if (!d.idealAlloc) d.idealAlloc = {};
+  if (!d.budgets) d.budgets = {};  // {year: {category: amount}} — each year is independent, never copied forward
   d.items = (d.items || []).map(i => {
     if (i.type !== "transfer") return i;
     if (i.cat === "Investments") return {...i, type: "expense", amount: -i.amount};
@@ -50,7 +51,7 @@ function migrate(d) {
   });
   return d;
 }
-function blank(){ return {updatedAt: 0, cur: "₹", banks: {date: "2026-01-01", bal: {}}, priceHistory: {}, catMap: {...DEFAULT_CAT_MAP}, netWorth: SEED_NET_WORTH.map(e => ({...e})), idealAlloc: {}, items: []}; }
+function blank(){ return {updatedAt: 0, cur: "₹", banks: {date: "2026-01-01", bal: {}}, priceHistory: {}, catMap: {...DEFAULT_CAT_MAP}, netWorth: SEED_NET_WORTH.map(e => ({...e})), idealAlloc: {}, budgets: {}, items: []}; }
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const money = n => hideAmounts ? "••••" : (n < 0 ? "-" : "") + db.cur + Math.abs(n).toLocaleString("en-IN",{maximumFractionDigits:2});
