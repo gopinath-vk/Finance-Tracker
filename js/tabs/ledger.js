@@ -18,15 +18,16 @@ function ledgerView(t, c){
   const ed = editId && db.items.find(i => i.id === editId && i.type === t);
   let items = db.items.filter(i => i.type === t && !(dated && (i.cat==="TR/WD" || i.cat==="CC Bill"))).sort((a,b) => (b.date||"").localeCompare(a.date||""));
   let filt = "", catChips = "";
-  if (t === "expense") {
-    const byCat = {}; items.forEach(i => byCat[i.cat] = (byCat[i.cat]||0) + i.amount);
-    const allCats = Object.keys(byCat).sort((a,b) => byCat[b]-byCat[a]);
-    catChips = `<div class="chips"><button class="${ecat==="all"?"on":""}" data-ecat="all">All · ${money(Object.values(byCat).reduce((a,b)=>a+b,0))}</button>${allCats.map(x => `<button class="${ecat===x?"on":""}" data-ecat="${esc(x)}">${esc(x)} · ${money(byCat[x])}</button>`).join("")}</div>`;
-    items = ecat==="all" ? items : items.filter(i => i.cat === ecat);
-  }
   if (dated) {
     const ys = [...new Set([...items.map(i => i.date.slice(0,4)), String(new Date().getFullYear()), ...(fy==="all" ? [] : [fy])])].sort().reverse();
+    // Apply the year/month filter first, so the category chips below reflect the same period as the total.
     items = items.filter(i => (fy==="all" || i.date.startsWith(fy)) && (fm==="all" || i.date.slice(5,7)===fm));
+    if (t === "expense") {
+      const byCat = {}; items.forEach(i => byCat[i.cat] = (byCat[i.cat]||0) + i.amount);
+      const allCats = Object.keys(byCat).sort((a,b) => byCat[b]-byCat[a]);
+      catChips = `<div class="chips"><button class="${ecat==="all"?"on":""}" data-ecat="all">All · ${money(Object.values(byCat).reduce((a,b)=>a+b,0))}</button>${allCats.map(x => `<button class="${ecat===x?"on":""}" data-ecat="${esc(x)}">${esc(x)} · ${money(byCat[x])}</button>`).join("")}</div>`;
+      items = ecat==="all" ? items : items.filter(i => i.cat === ecat);
+    }
     const tot = items.reduce((s,i) => s+i.amount, 0);
     filt = `<div class="card"><div class="mt"><select name="fy" aria-label="Year"><option value="all">All years</option>${ys.map(y => `<option ${y===fy?"selected":""}>${y}</option>`).join("")}</select>
       <select name="fm" aria-label="Month"><option value="all">All months</option>${MN.map((n,k) => { const v = String(k+1).padStart(2,"0"); return `<option value="${v}" ${v===fm?"selected":""}>${n}</option>`; }).join("")}</select></div>
