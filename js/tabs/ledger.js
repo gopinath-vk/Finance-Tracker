@@ -19,8 +19,9 @@ function ledgerView(t, c){
   let items = db.items.filter(i => i.type === t && !(dated && (i.cat==="TR/WD" || i.cat==="CC Bill"))).sort((a,b) => (b.date||"").localeCompare(a.date||""));
   let filt = "", catChips = "";
   if (t === "expense") {
-    const allCats = [...new Set(items.map(i => i.cat))].sort();
-    catChips = `<div class="chips"><button class="${ecat==="all"?"on":""}" data-ecat="all">All categories</button>${allCats.map(x => `<button class="${ecat===x?"on":""}" data-ecat="${esc(x)}">${esc(x)}</button>`).join("")}</div>`;
+    const byCat = {}; items.forEach(i => byCat[i.cat] = (byCat[i.cat]||0) + i.amount);
+    const allCats = Object.keys(byCat).sort((a,b) => byCat[b]-byCat[a]);
+    catChips = `<div class="chips"><button class="${ecat==="all"?"on":""}" data-ecat="all">All · ${money(Object.values(byCat).reduce((a,b)=>a+b,0))}</button>${allCats.map(x => `<button class="${ecat===x?"on":""}" data-ecat="${esc(x)}">${esc(x)} · ${money(byCat[x])}</button>`).join("")}</div>`;
     items = ecat==="all" ? items : items.filter(i => i.cat === ecat);
   }
   if (dated) {
@@ -38,10 +39,11 @@ function ledgerView(t, c){
     <select name="cat">${formCats.map(x => `<option ${ed && ed.cat===x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>
     <input name="amount" type="number" step="any" placeholder="${c.a}" value="${ed ? ed.amount : ""}" required>
     ${c.x ? `<input name="extra" type="number" step="any" placeholder="${c.x}" value="${ed ? val(ed.extra) : ""}">` : ""}
+    ${dated ? `<input name="note" placeholder="Details (optional)" value="${ed ? esc(ed.note||"") : ""}">` : ""}
     ${dated ? `<input name="source" list="srcs" placeholder="Source (bank / cash)" value="${ed ? esc(ed.source||"") : ""}"><datalist id="srcs">${Object.keys(balances()).map(x => `<option value="${esc(x)}">`).join("")}</datalist>` : ""}
     ${dated ? `<input name="date" type="date" value="${ed ? ed.date : new Date().toLocaleDateString("sv")}" required>` : ""}
     <button>${ed ? "Save changes" : "Add " + c.t.replace(/s$/,"").toLowerCase()}</button>${ed ? '<button type="button" class="ghost" data-cancel="1">Cancel</button>' : ""}</form>${filt}
-  <div class="card">${items.length ? items.map(i => `<div class="row"><div>${esc(i.name)}<div class="lab">${esc(i.cat)}${i.source?" · "+esc(i.source):""}${i.date?" · "+i.date:""}${t==="liability"?" · "+(i.extra||0)+"% interest":""}</div></div>
+  <div class="card">${items.length ? items.map(i => `<div class="row"><div>${esc(i.name)}<div class="lab">${esc(i.cat)}${i.source?" · "+esc(i.source):""}${i.date?" · "+i.date:""}${t==="liability"?" · "+(i.extra||0)+"% interest":""}${i.note?" · "+esc(i.note):""}</div></div>
     <div><b class="${t==="income"?"pos":"neg"}">${money(i.amount)}</b> ${acts(i)}</div></div>`).join("")
     : `<div class="empty">${dated ? "No entries for this period." : "Nothing here yet. Fill in the form above to add your first entry."}</div>`}</div>`;
 }
