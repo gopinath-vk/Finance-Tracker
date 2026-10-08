@@ -2,14 +2,15 @@
 // item-name -> category auto-suggestions (db.catMap) — collapsed by default, expand to add/edit/delete.
 let mapOpen = false, mapEdit = null, chartOpen = localStorage.getItem("ledger-expchartopen") !== "0";
 
-// Shows the whole year's spending by category, regardless of which month is selected in the filter above.
+// Shows spending by category for the selected year, and month if one is picked in the filter above.
 function expenseChart(){
   const items = db.items.filter(i => i.type==="expense" && i.cat!=="TR/WD" && i.cat!=="CC Bill" &&
-    (fy==="all" || i.date.startsWith(fy)));
+    (fy==="all" || i.date.startsWith(fy)) && (fm==="all" || i.date.slice(5,7)===fm));
   const cats = {}; items.forEach(i => cats[i.cat] = (cats[i.cat]||0) + i.amount);
   const entries = Object.entries(cats).sort((a,b) => b[1]-a[1]);
   const top = Math.max(1, ...entries.map(e => e[1]));
-  return `<div class="card"><button class="hd" data-exphd="1" aria-expanded="${chartOpen}"><span class="lab">Spending by category · ${fy==="all" ? "all years" : fy}</span><span class="lab">${chartOpen?"Hide ▲":"Show ▼"}</span></button>
+  const period = fy==="all" ? "all years" : fy + (fm==="all" ? "" : "-"+fm);
+  return `<div class="card"><button class="hd" data-exphd="1" aria-expanded="${chartOpen}"><span class="lab">Spending by category · ${period}</span><span class="lab">${chartOpen?"Hide ▲":"Show ▼"}</span></button>
   ${chartOpen ? (entries.length ? `<div style="margin-top:8px">${entries.map(([c,v]) =>
     `<div style="margin-top:8px"><div class="row" style="padding:0;border:0"><span>${esc(c)}</span><b>${money(v)}</b></div><div class="bar" style="width:${v/top*100}%"></div></div>`).join("")}</div>`
     : '<div class="empty">No expenses for this period.</div>') : ""}</div>`;
